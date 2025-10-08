@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8"/>
+  <title>WDT81 ESP Dumper</title>
+  <link rel="stylesheet" href="assets/style.css">   <!-- refolosești CSS-ul existent -->
+  <script src="https://cdn.skypack.dev/file-saver@2"></script>
+  <style>
+    /* suprascrieri minime */
+    .dump-section { background:#B3D9F2; border:4px solid #5B9BD5; border-radius:15px; padding:25px; margin:30px auto; max-width:700px; box-shadow:0 8px 30px rgba(0,0,0,.3);}
+    .dump-section h2 { color:#1a5f3f; margin-bottom:15px; }
+    progress { width:100%; height:22px; }
+    #logBox { width:100%; height:120px; font-family:monospace; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="header-images"> … </div>   <!-- refolosești fragmente -->
+  <div class="container">
+     <h1>WDT81 <strong>Universal ESP Dumper</strong></h1>
+
+     <div class="dump-section">
+       <h2>1. Conectare</h2>
+       <p>Selectați portul serial și viteza (default 921 600):</p>
+       <button id="btnConnect">🔗 CONNECT</button>
+       <span id="chipInfo"></span>
+     </div>
+
+     <div class="dump-section">
+       <h2>2. Dump flash</h2>
+       <label>Dimensiune (octeți): <input id="dumpSize" type="number" value="0x400000"/></label><br/>
+       <button id="btnDump" disabled>💾 START DUMP</button>
+       <progress id="progress" value="0" max="100"></progress>
+     </div>
+
+     <div class="dump-section">
+       <h2>3. Salvare & GitHub</h2>
+       <label><input id="chkGitHub" type="checkbox"/>  Încarcă automat pe GitHub</label><br/>
+       <input id="token" type="password" placeholder="GitHub Personal Access Token"/>
+       <button id="btnSave" disabled>💻 SAVE .BIN</button>
+       <div id="gitLink"></div>
+     </div>
+
+     <textarea id="logBox" readonly></textarea>
+  </div>
+
+<script type="module">
+import { ESPLoader } from 'https://cdn.skypack.dev/esptool-js';
+import { Transport } from 'https://cdn.skypack.dev/esptool-js/serial.js';
+import { saveAs } from 'https://cdn.skypack.dev/file-saver';
+
+let esp, transport, chip, lastBlob;
+
+const $ = id => document.getElementById(id);
+const log = msg => { $('logBox').value += msg + '\n'; $('logBox').scrollTop = 1e9; };
+
+$('btnConnect').onclick = async () => {
+  try {
+    const port = await navigator.serial.requestPort({});
+    await port.open({ baudRate: 921600 });
+    transport = new Transport(port);
+    esp = new ESPLoader(transport, 921600, log);
+    await esp.initialize();
+    chip = await esp.chipName();
+    $('chipInfo').textContent = `Detectat: ${chip}`;
+    $('btnDump').disabled = false;
+  } catch(e) { alert(e); }
+};
+
+$('btnDump').onclick = async () => {
+  const size = parseInt($('dumpSize').value);
+  $('progress').value = 0;
+  log('Încep citirea…');
+  const step = 0x10000, chunks = [];
+  for(let off = 0; off < size; off += step) {
+    const len = Math.min(step, size - off);
+    const data = await esp.readFlash(off, len);
+    chunks.push(data);
+    $('progress').value = (off + len) / size * 100;
+  }
+  lastBlob = new Blob(chunks, {type:'application/octet-stream'});
+  const name = `dump_${chip}_${Date.now()}.bin`;
+  saveAs(lastBlob, name);
+  $('btnSave').disabled = false;
+  log('Dump finalizat. Salvați local sau încărcați pe GitHub.');
+};
+
+$('btnSave').onclick = async () => {
+  if(!$('chkGitHub').checked) return;
+  const token = $('token').value.trim();
+  if(!token) { alert('Introduceți token GitHub'); return; }
+  const owner = 'CristiWDT1881', repo = 'esp-dumps';   // ← schimbă cu ale tale
+  const path = `dumps/dump_${chip}_${Date.now()}.bin`;
+  const content = await blobToBase64(lastBlob);
+  const body = {
+    message: `Add dump ${chip} ${new Date().toISOString()}`,
+    content: content.split(',')[1]   // scoate prefixul data:*;base64,
+  };
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const r = await fetch(url, {
+    method:'PUT',
+    headers:{ 'Authorization':`token ${token}`, 'Content-Type':'application/json' },
+    body:JSON.stringify(body)
+  });
+  if(r.ok) {
+    const j = await r.json();
+    $('gitLink').innerHTML = `✅ Upload reușit: <a href="${j.content.download_url}" target="_blank">${j.content.name}</a>`;
+  } else { alert('Eroare upload: ' + r.statusText); }
+};
+
+async function blobToBase64(b){ return new Promise(r=>{const rd=new FileReader();rd.onloadend=()=>r(rd.result);rd.readAsDataURL(b);});}
+</script>
+</body>
+</html>
