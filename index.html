@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Flash Dumper & Writer</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
     <style>
         * {
             margin: 0;
@@ -56,8 +57,8 @@
         .section {
             background: #B3D9F2;
             border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
+            padding: 15px 25px;
+            margin-bottom: 20px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.3);
             border: 4px solid #5B9BD5;
         }
@@ -66,7 +67,7 @@
             display: flex;
             gap: 20px;
             align-items: flex-start;
-            padding: 30px;
+            padding: 15px 25px;
         }
 
         .section-content {
@@ -83,17 +84,17 @@
 
         .section h2 {
             color: #1a5f3f;
-            font-size: 1.8em;
+            font-size: 1.5em;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
 
         .section p {
             color: #000;
-            font-size: 1.3em;
+            font-size: 1.1em;
             font-weight: 500;
-            margin-bottom: 12px;
-            padding: 10px;
+            margin-bottom: 8px;
+            padding: 8px;
             border-radius: 8px;
         }
 
@@ -103,55 +104,47 @@
         }
 
         .control-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .control-group label {
             color: #1a5f3f;
-            font-size: 1.2em;
+            font-size: 1em;
             font-weight: bold;
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
         }
 
-        .control-group input[type="text"],
-        .control-group input[type="number"],
-        .control-group input[type="file"],
         .control-group select {
             width: 100%;
-            padding: 12px;
-            font-size: 1.1em;
+            padding: 8px;
+            font-size: 1em;
             border: 3px solid #5B9BD5;
             border-radius: 8px;
             background: white;
         }
 
-        .control-group input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-        }
-
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            color: #000;
-            font-size: 1.2em;
-            font-weight: 500;
+        .control-group input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            font-size: 1em;
+            border: 3px solid #5B9BD5;
+            border-radius: 8px;
+            background: white;
         }
 
         .button-group {
             display: flex;
-            gap: 15px;
-            margin-top: 20px;
+            gap: 10px;
+            margin-top: 12px;
             flex-wrap: wrap;
         }
 
         button {
             flex: 1;
-            min-width: 200px;
-            padding: 25px 40px;
-            font-size: 1.4em;
+            min-width: 180px;
+            padding: 15px 25px;
+            font-size: 1.2em;
             font-weight: bold;
             border: none;
             border-radius: 12px;
@@ -193,11 +186,6 @@
             transform: translateY(-2px);
         }
 
-        .btn-erase {
-            background: #ffc107;
-            color: #000;
-        }
-
         @keyframes blinkColors {
             0% { background: #dc3545; }
             50% { background: #5B9BD5; }
@@ -219,12 +207,12 @@
 
         .status {
             background: white;
-            padding: 15px;
+            padding: 10px;
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             border: 3px solid #5B9BD5;
             color: #000;
-            font-size: 1.2em;
+            font-size: 1em;
             font-weight: 500;
         }
 
@@ -245,12 +233,12 @@
 
         .progress-bar {
             width: 100%;
-            height: 40px;
+            height: 30px;
             background: white;
             border-radius: 8px;
             border: 3px solid #5B9BD5;
             overflow: hidden;
-            margin: 20px 0;
+            margin: 12px 0;
             display: none;
         }
 
@@ -268,7 +256,7 @@
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 1.1em;
+            font-size: 1em;
         }
 
         .log-container {
@@ -276,7 +264,7 @@
             color: #00ff00;
             padding: 15px;
             border-radius: 8px;
-            max-height: 300px;
+            max-height: 600px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
@@ -302,6 +290,10 @@
 
         .log-entry.warning {
             color: #ffd43b;
+        }
+
+        .log-entry.info {
+            color: #74c0fc;
         }
 
         .hidden {
@@ -355,7 +347,7 @@
             }
             
             .section p {
-                font-size: 1.1em;
+                font-size: 1em;
             }
 
             .button-group {
@@ -384,12 +376,33 @@
                 <div id="status" class="status">Status: Disconnected</div>
                 
                 <div class="control-group">
+                    <label>Device Type:</label>
+                    <select id="deviceType">
+                        <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN ⭐</option>
+                        <option value="ESP32-S3">ESP32-S3 (Generic, LilyGO)</option>
+                        <option value="ESP32-S3-DevKit">ESP32-S3-DevKitC</option>
+                        <option value="ESP32-S3-WROOM">ESP32-S3-WROOM-1/2</option>
+                        <option value="ESP32">ESP32 (DevKit, NodeMCU)</option>
+                        <option value="ESP32-WROOM">ESP32-WROOM-32</option>
+                        <option value="ESP32-WROVER">ESP32-WROVER</option>
+                        <option value="ESP32-S2">ESP32-S2</option>
+                        <option value="ESP32-C3">ESP32-C3 (RISC-V)</option>
+                        <option value="ESP32-C6">ESP32-C6</option>
+                        <option value="ESP32-H2">ESP32-H2</option>
+                        <option value="ESP32-T-CAN485">LilyGO T-CAN485</option>
+                        <option value="ESP32-TTGO">LilyGO TTGO T-Display</option>
+                        <option value="ESP8266">ESP8266 (NodeMCU, Wemos)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
                     <label>Baud Rate:</label>
                     <select id="baudRate">
                         <option value="115200">115200</option>
                         <option value="230400">230400</option>
                         <option value="460800">460800</option>
                         <option value="921600" selected>921600</option>
+                        <option value="1500000">1500000</option>
                     </select>
                 </div>
 
@@ -404,25 +417,12 @@
         <!-- Dump Section -->
         <div class="section">
             <h2>📥 Happy Read - Dump Flash</h2>
-            
-            <div class="control-group">
-                <label>Start Address (hex):</label>
-                <input type="text" id="dumpAddress" value="0x0" placeholder="0x0">
-            </div>
-
-            <div class="control-group">
-                <label>Size (bytes):</label>
-                <input type="number" id="dumpSize" value="4194304" placeholder="4194304">
-            </div>
-
-            <div class="control-group">
-                <label>Filename:</label>
-                <input type="text" id="dumpFilename" value="esp32_dump.bin" placeholder="esp32_dump.bin">
-            </div>
+            <p><strong>1.</strong> Connect device via USB</p>
+            <p><strong>2.</strong> Click HAPPY READ to dump entire flash</p>
+            <p><strong>3.</strong> File will be saved automatically</p>
 
             <div class="button-group">
                 <button id="dumpBtn" class="btn-read" disabled>📥 HAPPY READ</button>
-                <button id="quickDumpBtn" class="btn-read" disabled>⚡ QUICK DUMP</button>
             </div>
 
             <div id="dumpProgress" class="progress-bar">
@@ -433,34 +433,17 @@
         <!-- Write Section -->
         <div class="section">
             <h2>📤 Happy Write - Write Flash</h2>
-            
-            <div class="control-group">
-                <label>Start Address (hex):</label>
-                <input type="text" id="writeAddress" value="0x0" placeholder="0x0">
-            </div>
+            <p><strong>1.</strong> Select firmware file (.bin)</p>
+            <p><strong>2.</strong> Click HAPPY WRITE</p>
+            <p><strong>3.</strong> Choose erase option when prompted</p>
 
             <div class="control-group">
-                <label>Select Firmware File (.bin):</label>
-                <input type="file" id="writeFile" accept=".bin">
-            </div>
-
-            <div class="control-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="eraseBeforeWrite" checked>
-                    Erase flash before writing
-                </label>
-            </div>
-
-            <div class="control-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="verifyWrite" checked>
-                    Verify after writing
-                </label>
+                <label>Select Firmware File:</label>
+                <input type="file" id="writeFile" accept=".bin" multiple>
             </div>
 
             <div class="button-group">
                 <button id="writeBtn" class="btn-write" disabled>📤 HAPPY WRITE</button>
-                <button id="eraseBtn" class="btn-erase" disabled>🗑️ ERASE FLASH</button>
             </div>
 
             <div id="writeProgress" class="progress-bar">
@@ -472,7 +455,7 @@
         <div class="section">
             <h2>📋 Operation Log</h2>
             <div id="logContainer" class="log-container">
-                <div class="log-entry">System initialized. Connect device to start...</div>
+                <div class="log-entry info">System initialized. Connect device to start...</div>
             </div>
         </div>
 
@@ -493,12 +476,15 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script>
+    <script type="module">
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.0/bundle.js';
+
         // State
         const state = {
             port: null,
-            reader: null,
-            writer: null,
+            esploader: null,
+            transport: null,
+            chip: null,
             connected: false,
             isOperating: false
         };
@@ -509,14 +495,15 @@
             connectBtn: document.getElementById('connectBtn'),
             disconnectBtn: document.getElementById('disconnectBtn'),
             dumpBtn: document.getElementById('dumpBtn'),
-            quickDumpBtn: document.getElementById('quickDumpBtn'),
             writeBtn: document.getElementById('writeBtn'),
-            eraseBtn: document.getElementById('eraseBtn'),
             logContainer: document.getElementById('logContainer'),
             dumpProgress: document.getElementById('dumpProgress'),
             dumpProgressFill: document.getElementById('dumpProgressFill'),
             writeProgress: document.getElementById('writeProgress'),
-            writeProgressFill: document.getElementById('writeProgressFill')
+            writeProgressFill: document.getElementById('writeProgressFill'),
+            deviceType: document.getElementById('deviceType'),
+            baudRate: document.getElementById('baudRate'),
+            writeFile: document.getElementById('writeFile')
         };
 
         // Logging
@@ -528,6 +515,7 @@
             el.logContainer.appendChild(entry);
             el.logContainer.scrollTop = el.logContainer.scrollHeight;
             el.logContainer.classList.add('active');
+            console.log(`[${type}] ${message}`);
         }
 
         function updateStatus(message, type = '') {
@@ -545,6 +533,11 @@
             progressEl.classList.remove('active');
         }
 
+        // ESP Loader logger
+        function espLoaderTerminal(text) {
+            log(text, 'info');
+        }
+
         // Connection
         async function connect() {
             try {
@@ -554,56 +547,63 @@
                 }
 
                 updateStatus('Connecting...', 'working');
-                log('Initiating connection...', 'info');
+                log('Requesting serial port...', 'info');
 
-                const baudRate = parseInt(document.getElementById('baudRate').value);
                 state.port = await navigator.serial.requestPort();
                 
-                await state.port.open({
-                    baudRate: baudRate,
-                    dataBits: 8,
-                    stopBits: 1,
-                    parity: 'none',
-                    flowControl: 'none'
+                const baudRate = parseInt(el.baudRate.value);
+                
+                // Create transport
+                state.transport = new Transport(state.port);
+                
+                // Create ESPLoader
+                state.esploader = new ESPLoader({
+                    transport: state.transport,
+                    baudrate: baudRate,
+                    terminal: espLoaderTerminal
                 });
 
-                state.reader = state.port.readable.getReader();
-                state.writer = state.port.writable.getWriter();
+                log('Connecting to device...', 'info');
+                
+                // Connect and detect chip
+                state.chip = await state.esploader.main();
+                
                 state.connected = true;
 
-                updateStatus('✅ Connected - Ready!', 'connected');
-                log(`Connected successfully at ${baudRate} baud`, 'success');
+                const chipType = await state.esploader.chipName();
+                const macAddr = await state.esploader.macAddr();
+                const flashSize = await state.esploader.getFlashSize();
+
+                updateStatus(`✅ Connected - ${chipType}`, 'connected');
+                log(`Chip: ${chipType}`, 'success');
+                log(`MAC: ${macAddr}`, 'success');
+                log(`Flash size: ${flashSize} MB`, 'success');
 
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
                 el.dumpBtn.disabled = false;
-                el.quickDumpBtn.disabled = false;
                 el.writeBtn.disabled = false;
-                el.eraseBtn.disabled = false;
 
             } catch (error) {
                 log(`Connection error: ${error.message}`, 'error');
                 updateStatus('❌ Connection failed', 'error');
+                console.error(error);
             }
         }
 
         async function disconnect() {
             try {
-                if (state.reader) {
-                    await state.reader.cancel();
-                    state.reader.releaseLock();
-                }
-                if (state.writer) {
-                    await state.writer.close();
-                    state.writer.releaseLock();
+                if (state.transport) {
+                    await state.transport.disconnect();
                 }
                 if (state.port) {
                     await state.port.close();
                 }
 
                 state.port = null;
-                state.reader = null;
-                state.writer = null;
+                state.esploader = null;
+                state.transport = null;
+                state.chip = null;
                 state.connected = false;
 
                 updateStatus('Disconnected', '');
@@ -612,175 +612,200 @@
                 el.connectBtn.disabled = false;
                 el.disconnectBtn.disabled = true;
                 el.dumpBtn.disabled = true;
-                el.quickDumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
-                el.eraseBtn.disabled = true;
 
             } catch (error) {
                 log(`Disconnect error: ${error.message}`, 'error');
             }
         }
 
-        // Dump
-        async function startDump() {
+        // Happy Read - Dump entire flash
+        async function happyRead() {
             if (!state.connected || state.isOperating) return;
 
-            state.isOperating = true;
-            const address = document.getElementById('dumpAddress').value;
-            const size = parseInt(document.getElementById('dumpSize').value);
-            const filename = document.getElementById('dumpFilename').value;
+            try {
+                state.isOperating = true;
+                el.dumpBtn.disabled = true;
+                el.writeBtn.disabled = true;
 
-            log(`Starting Happy Read - Address: ${address}, Size: ${size} bytes`, 'info');
-            updateStatus('📥 Reading flash memory...', 'working');
-            
-            el.dumpBtn.disabled = true;
-            el.quickDumpBtn.disabled = true;
-            el.writeBtn.disabled = true;
-            el.eraseBtn.disabled = true;
+                log('Starting Happy Read - Full flash dump...', 'info');
+                updateStatus('📥 Reading flash memory...', 'working');
 
-            // Simulate dump
-            const chunks = 100;
-            const dumpData = new Uint8Array(size);
+                // Get flash size
+                const flashSize = await state.esploader.getFlashSize();
+                const flashSizeBytes = flashSize * 1024 * 1024; // Convert MB to bytes
+                
+                log(`Flash size: ${flashSize} MB (${flashSizeBytes} bytes)`, 'info');
 
-            for (let i = 0; i <= chunks; i++) {
-                if (!state.isOperating) break;
+                const address = 0x0;
+                const chunkSize = 4096; // Read in 4KB chunks
+                const totalChunks = Math.ceil(flashSizeBytes / chunkSize);
+                
+                const dumpData = new Uint8Array(flashSizeBytes);
+                let offset = 0;
 
-                const progress = Math.floor((i / chunks) * 100);
-                const bytes = Math.floor((i / chunks) * size);
-                updateProgress(el.dumpProgress, el.dumpProgressFill, progress, `${progress}% - ${bytes}/${size} bytes`);
+                log(`Reading ${totalChunks} chunks...`, 'info');
 
-                // Simulate data
-                if (i < chunks) {
-                    const start = Math.floor(i * (size / chunks));
-                    const end = Math.floor((i + 1) * (size / chunks));
-                    for (let j = start; j < end; j++) {
-                        dumpData[j] = Math.floor(Math.random() * 256);
+                for (let i = 0; i < totalChunks; i++) {
+                    const currentAddr = address + (i * chunkSize);
+                    const readSize = Math.min(chunkSize, flashSizeBytes - offset);
+                    
+                    // Read flash block
+                    const block = await state.esploader.readFlash(currentAddr, readSize);
+                    
+                    // Copy to dump array
+                    dumpData.set(new Uint8Array(block), offset);
+                    offset += readSize;
+
+                    // Update progress
+                    const progress = Math.floor((i / totalChunks) * 100);
+                    updateProgress(
+                        el.dumpProgress, 
+                        el.dumpProgressFill, 
+                        progress, 
+                        `${progress}% - ${Math.floor(offset / 1024)} / ${Math.floor(flashSizeBytes / 1024)} KB`
+                    );
+
+                    // Log every 10%
+                    if (i % Math.floor(totalChunks / 10) === 0) {
+                        log(`Progress: ${progress}% (${Math.floor(offset / 1024)} KB)`, 'info');
                     }
                 }
 
-                await new Promise(resolve => setTimeout(resolve, 30));
-            }
-
-            if (state.isOperating) {
+                // Save file
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                const chipName = await state.esploader.chipName();
+                const filename = `${chipName}_dump_${timestamp}.bin`;
+                
                 const blob = new Blob([dumpData], {type: 'application/octet-stream'});
                 saveAs(blob, filename);
+
+                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100% - Complete!');
                 log(`✅ Happy Read complete! Saved as: ${filename}`, 'success');
                 updateStatus('✅ Dump completed successfully!', 'connected');
+
+                setTimeout(() => {
+                    hideProgress(el.dumpProgress);
+                }, 3000);
+
+            } catch (error) {
+                log(`Dump error: ${error.message}`, 'error');
+                updateStatus('❌ Dump failed', 'error');
+                console.error(error);
+                hideProgress(el.dumpProgress);
+            } finally {
+                state.isOperating = false;
+                el.dumpBtn.disabled = false;
+                el.writeBtn.disabled = false;
             }
-
-            hideProgress(el.dumpProgress);
-            el.dumpBtn.disabled = false;
-            el.quickDumpBtn.disabled = false;
-            el.writeBtn.disabled = false;
-            el.eraseBtn.disabled = false;
-            state.isOperating = false;
         }
 
-        async function quickDump() {
-            document.getElementById('dumpSize').value = '4194304';
-            document.getElementById('dumpAddress').value = '0x0';
-            document.getElementById('dumpFilename').value = `esp32_full_${Date.now()}.bin`;
-            await startDump();
-        }
-
-        // Write
-        async function startWrite() {
+        // Happy Write - Write firmware with erase option
+        async function happyWrite() {
             if (!state.connected || state.isOperating) return;
 
-            const fileInput = document.getElementById('writeFile');
-            if (!fileInput.files.length) {
-                alert('Please select a firmware file!');
+            const files = el.writeFile.files;
+            if (!files.length) {
+                alert('Please select firmware file(s)!');
                 return;
             }
 
-            state.isOperating = true;
-            const address = document.getElementById('writeAddress').value;
-            const file = fileInput.files[0];
-            const verify = document.getElementById('verifyWrite').checked;
-            const eraseFirst = document.getElementById('eraseBeforeWrite').checked;
+            // Ask to erase
+            const shouldErase = confirm('Do you want to ERASE flash before writing?\n\n✅ YES - Full erase (recommended)\n❌ NO - Write without erasing');
 
-            log(`Starting Happy Write - Address: ${address}, File: ${file.name} (${file.size} bytes)`, 'info');
-            updateStatus('📤 Writing to flash memory...', 'working');
-            
-            el.dumpBtn.disabled = true;
-            el.quickDumpBtn.disabled = true;
-            el.writeBtn.disabled = true;
-            el.eraseBtn.disabled = true;
+            try {
+                state.isOperating = true;
+                el.dumpBtn.disabled = true;
+                el.writeBtn.disabled = true;
 
-            if (eraseFirst) {
-                log('Erasing flash before write...', 'warning');
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                log('Flash erased successfully', 'success');
-            }
+                log('Starting Happy Write...', 'info');
+                updateStatus('📤 Writing to flash...', 'working');
 
-            const arrayBuffer = await file.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            const chunks = 100;
-
-            for (let i = 0; i <= chunks; i++) {
-                if (!state.isOperating) break;
-
-                const progress = Math.floor((i / chunks) * 100);
-                const bytes = Math.floor((i / chunks) * data.length);
-                updateProgress(el.writeProgress, el.writeProgressFill, progress, `${progress}% - ${bytes}/${data.length} bytes`);
-
-                await new Promise(resolve => setTimeout(resolve, 30));
-            }
-
-            if (state.isOperating) {
-                if (verify) {
-                    log('Verifying written data...', 'info');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    log('Verification complete - Data OK!', 'success');
+                // Erase if requested
+                if (shouldErase) {
+                    log('Erasing flash memory...', 'warning');
+                    updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
+                    
+                    await state.esploader.eraseFlash();
+                    
+                    log('✅ Flash erased successfully', 'success');
                 }
-                
+
+                // Prepare file array for writing
+                const fileArray = [];
+                let totalSize = 0;
+
+                for (let file of files) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const data = new Uint8Array(arrayBuffer);
+                    
+                    // Try to detect offset from filename
+                    let offset = 0x0;
+                    if (file.name.includes('bootloader')) {
+                        offset = 0x0;
+                    } else if (file.name.includes('partition')) {
+                        offset = 0x8000;
+                    } else if (file.name.includes('app') || file.name.includes('firmware')) {
+                        offset = 0x10000;
+                    }
+
+                    fileArray.push({
+                        data: data,
+                        address: offset
+                    });
+
+                    totalSize += data.length;
+                    log(`File: ${file.name} (${data.length} bytes) @ 0x${offset.toString(16)}`, 'info');
+                }
+
+                // Write files
+                log(`Writing ${fileArray.length} file(s), total ${totalSize} bytes...`, 'info');
+
+                await state.esploader.writeFlash({
+                    fileArray: fileArray,
+                    flashSize: 'keep',
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        const progress = Math.floor((written / total) * 100);
+                        updateProgress(
+                            el.writeProgress,
+                            el.writeProgressFill,
+                            progress,
+                            `${progress}% - ${Math.floor(written / 1024)} / ${Math.floor(total / 1024)} KB`
+                        );
+                    }
+                });
+
+                updateProgress(el.writeProgress, el.writeProgressFill, 100, '100% - Complete!');
                 log('✅ Happy Write completed successfully!', 'success');
-                updateStatus('✅ Write completed successfully!', 'connected');
+                updateStatus('✅ Write completed!', 'connected');
+
+                setTimeout(() => {
+                    hideProgress(el.writeProgress);
+                }, 3000);
+
+            } catch (error) {
+                log(`Write error: ${error.message}`, 'error');
+                updateStatus('❌ Write failed', 'error');
+                console.error(error);
+                hideProgress(el.writeProgress);
+            } finally {
+                state.isOperating = false;
+                el.dumpBtn.disabled = false;
+                el.writeBtn.disabled = false;
             }
-
-            hideProgress(el.writeProgress);
-            el.dumpBtn.disabled = false;
-            el.quickDumpBtn.disabled = false;
-            el.writeBtn.disabled = false;
-            el.eraseBtn.disabled = false;
-            state.isOperating = false;
-        }
-
-        async function eraseFlash() {
-            if (!state.connected || state.isOperating) return;
-
-            if (!confirm('Are you sure you want to erase the entire flash? This is irreversible!')) {
-                return;
-            }
-
-            state.isOperating = true;
-            log('Starting full flash erase...', 'warning');
-            updateStatus('🗑️ Erasing flash memory...', 'working');
-
-            el.dumpBtn.disabled = true;
-            el.quickDumpBtn.disabled = true;
-            el.writeBtn.disabled = true;
-            el.eraseBtn.disabled = true;
-
-            await new Promise(resolve => setTimeout(resolve, 5000));
-
-            log('✅ Flash erased completely!', 'success');
-            updateStatus('✅ Flash erased - Ready for write', 'connected');
-
-            el.dumpBtn.disabled = false;
-            el.quickDumpBtn.disabled = false;
-            el.writeBtn.disabled = false;
-            el.eraseBtn.disabled = false;
-            state.isOperating = false;
         }
 
         // Event listeners
         el.connectBtn.addEventListener('click', connect);
         el.disconnectBtn.addEventListener('click', disconnect);
-        el.dumpBtn.addEventListener('click', startDump);
-        el.quickDumpBtn.addEventListener('click', quickDump);
-        el.writeBtn.addEventListener('click', startWrite);
-        el.eraseBtn.addEventListener('click', eraseFlash);
+        el.dumpBtn.addEventListener('click', happyRead);
+        el.writeBtn.addEventListener('click', happyWrite);
+
+        // Initial log
+        log('ESP32 Flash Dumper & Writer ready', 'success');
+        log('Select device type and click CONNECT to start', 'info');
     </script>
 </body>
 </html>
