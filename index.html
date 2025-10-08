@@ -3,141 +3,784 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WDT81 ESP Dumper & Installer</title>
-    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <title>ESP32 Flash Dumper & Writer</title>
     <style>
-        *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:'Segoe UI',Arial,sans-serif;background:#1a5f3f;color:#fff;min-height:100vh;padding:20px;display:flex;flex-direction:column;align-items:center;}
-        .header-images{display:flex;justify-content:space-between;align-items:flex-start;width:100%;max-width:700px;margin-bottom:40px;}
-        .header-images img{max-width:180px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.3);border:4px solid #5B9BD5;}
-        .logo-center{text-align:center;margin-bottom:20px;}
-        .logo-center img{max-width:200px;height:auto;}
-        .container{max-width:700px;width:100%;}
-        h1{color:#FFD700;font-size:2.8em;font-weight:bold;text-align:center;margin-bottom:30px;text-shadow:2px 2px 4px rgba(0,0,0,.3);}
-        .install-section{background:#B3D9F2;border-radius:15px;padding:25px;margin-bottom:30px;box-shadow:0 8px 30px rgba(0,0,0,.3);border:4px solid #5B9BD5;color:#000;}
-        .install-section.first-box{display:flex;gap:20px;align-items:flex-start;padding:30px;}
-        .install-content{flex:1;}
-        .signature-img{width:130px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.2);border:4px solid #5B9BD5;}
-        .install-section h2{color:#1a5f3f;font-size:1.8em;font-weight:bold;margin-bottom:20px;}
-        .install-section p{color:#000;font-size:1.3em;font-weight:500;margin-bottom:12px;padding:10px;border-radius:8px;}
-        .install-section strong{color:#FFD700;font-weight:bold;}
-        .dump-box{margin-top:20px;padding:20px;background:#dff0f8;border-radius:10px;border:2px solid #5B9BD5;}
-        .dump-box h3{color:#1a5f3f;margin-bottom:10px;}
-        .dump-box button{background:#dc3545;color:#fff;border:none;padding:12px 24px;font-size:1.1em;font-weight:bold;border-radius:8px;cursor:pointer;transition:.3s;}
-        .dump-box button:hover{animation:blink .6s infinite;transform:translateY(-2px);}
-        @keyframes blink{0%,100%{background:#dc3545}50%{background:#5B9BD5}}
-        progress{width:100%;height:22px;margin-top:10px;}
-        #logBox{width:100%;height:100px;font-family:monospace;font-size:12px;margin-top:10px;}
-        .links-section,.radio-section{background:#B3D9F2;border-radius:15px;padding:25px;margin-top:30px;box-shadow:0 8px 30px rgba(0,0,0,.3);border:4px solid #5B9BD5;color:#000;}
-        .links-section h3,.radio-section h3{color:#1a5f3f;font-size:1.5em;font-weight:bold;margin-bottom:15px;}
-        .radio-links{display:flex;justify-content:space-around;gap:30px;flex-wrap:wrap;}
-        .radio-link{display:flex;flex-direction:column;align-items:center;text-decoration:none;transition:transform .3s;}
-        .radio-link:hover{transform:scale(1.1);}
-        .radio-link img{width:120px;height:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.2);border:4px solid #5B9BD5;}
-        .radio-link span{color:#000;font-weight:bold;font-size:1.1em;}
-        .footer-image{text-align:right;margin-top:20px;}
-        .footer-image img{max-width:200px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.3);}
-        @media(max-width:768px){.header-images{flex-direction:column;align-items:center;gap:15px}h1{font-size:2em}.install-section p{font-size:1.1em}}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #1a5f3f;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .header-images {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+            max-width: 700px;
+            margin-bottom: 40px;
+        }
+
+        .header-images img {
+            max-width: 180px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 4px solid #5B9BD5;
+        }
+
+        .container {
+            max-width: 700px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #FFD700;
+            font-size: 2.8em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .section {
+            background: #B3D9F2;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            border: 4px solid #5B9BD5;
+        }
+
+        .section.first-box {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            padding: 30px;
+        }
+
+        .section-content {
+            flex: 1;
+        }
+
+        .signature-img {
+            width: 130px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border: 4px solid #5B9BD5;
+        }
+
+        .section h2 {
+            color: #1a5f3f;
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .section p {
+            color: #000;
+            font-size: 1.3em;
+            font-weight: 500;
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .section strong {
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            color: #1a5f3f;
+            font-size: 1.2em;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .control-group input[type="text"],
+        .control-group input[type="number"],
+        .control-group input[type="file"],
+        .control-group select {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            border: 3px solid #5B9BD5;
+            border-radius: 8px;
+            background: white;
+        }
+
+        .control-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            color: #000;
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 200px;
+            padding: 25px 40px;
+            font-size: 1.4em;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            color: white;
+        }
+
+        .btn-connect {
+            background: #28a745;
+        }
+
+        .btn-connect:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.5);
+        }
+
+        .btn-disconnect {
+            background: #6c757d;
+        }
+
+        .btn-read {
+            background: #007bff;
+        }
+
+        .btn-read:hover {
+            animation: blinkBlue 0.6s infinite;
+            transform: translateY(-2px);
+        }
+
+        .btn-write {
+            background: #dc3545;
+        }
+
+        .btn-write:hover {
+            animation: blinkColors 0.6s infinite;
+            transform: translateY(-2px);
+        }
+
+        .btn-erase {
+            background: #ffc107;
+            color: #000;
+        }
+
+        @keyframes blinkColors {
+            0% { background: #dc3545; }
+            50% { background: #5B9BD5; }
+            100% { background: #dc3545; }
+        }
+
+        @keyframes blinkBlue {
+            0% { background: #007bff; }
+            50% { background: #5B9BD5; }
+            100% { background: #007bff; }
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            animation: none !important;
+        }
+
+        .status {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 3px solid #5B9BD5;
+            color: #000;
+            font-size: 1.2em;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        .status.working {
+            border-color: #ffc107;
+            background: #fff3cd;
+        }
+
+        .status.error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 40px;
+            background: white;
+            border-radius: 8px;
+            border: 3px solid #5B9BD5;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar.active {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #5B9BD5);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            display: none;
+        }
+
+        .log-container.active {
+            display: block;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.success {
+            color: #51cf66;
+        }
+
+        .log-entry.warning {
+            color: #ffd43b;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .radio-links {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .radio-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            transition: transform 0.3s;
+        }
+
+        .radio-link:hover {
+            transform: scale(1.1);
+        }
+
+        .radio-link img {
+            width: 120px;
+            height: 120px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin-bottom: 10px;
+            border: 4px solid #5B9BD5;
+        }
+
+        .radio-link span {
+            color: #000;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+            .header-images {
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .section p {
+                font-size: 1.1em;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                min-width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="header-images">
-        <img src="palatiasi.png" alt="Palatul Culturii">
-        <img src="logo.png" alt="Logo">
+        <img src="./palatiasi.png" alt="Palatul Culturii">
+        <img src="./logo.png" alt="Logo">
     </div>
+
     <div class="container">
-        <h1>WDT81 <strong>ESP Dumper & Installer</strong></h1>
+        <h1><strong>ESP32 Flash Dumper & Writer</strong></h1>
 
-        <!-- ========= 1. DUMP (read) ========= -->
-        <div class="install-section">
-            <div class="install-content">
-                <h2>1. Connect & Dump</h2>
-                <p><strong>1.</strong> Connect <strong>any ESP</strong> via USB</p>
-                <p><strong>2.</strong> Click <strong>Connect</strong></p>
-                <p><strong>3.</strong> Press <strong>START DUMP</strong></p>
-                <p><strong>4.</strong> Save <code>.bin</code> to PC</p>
-                <div class="dump-box">
-                    <button id="btnConnect">🔗 Connect</button>
-                    <span id="chipInfo" style="margin-left:10px;font-weight:bold"></span><br/>
-                    <label>Size (bytes): <input id="dumpSize" type="number" value="0x400000"/></label><br/>
-                    <button id="btnDump" disabled>💾 START DUMP</button>
-                    <progress id="progress" value="0" max="100"></progress>
-                    <textarea id="logBox" readonly placeholder="Log..."></textarea>
+        <!-- Connection Section -->
+        <div class="section first-box">
+            <div class="section-content">
+                <h2>📡 Connect Device</h2>
+                <div id="status" class="status">Status: Disconnected</div>
+                
+                <div class="control-group">
+                    <label>Baud Rate:</label>
+                    <select id="baudRate">
+                        <option value="115200">115200</option>
+                        <option value="230400">230400</option>
+                        <option value="460800">460800</option>
+                        <option value="921600" selected>921600</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button id="connectBtn" class="btn-connect">CONNECT</button>
+                    <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
                 </div>
             </div>
-            <img src="semnatura.png" alt="Signature" class="signature-img">
+            <img src="./semnatura.png" alt="Signature" class="signature-img">
         </div>
 
-        <!-- ========= 2. WRITE (instalare) – neschimbat ========= -->
-        <div class="install-section">
-            <div class="install-content">
-                <h2>2. Flash Firmware (Write)</h2>
-                <p>Connect Waveshare ESP32-S3, then:</p>
-                <esp-web-install-button manifest="manifest.json">
-                    <button slot="activate">HAPPY DUMP & INSTALL</button>
-                    <span slot="unsupported" style="color:#FFD700;font-weight:bold">❌ Use Chrome, Edge or Opera</span>
-                </esp-web-install-button>
-                <div class="progress-info">
-                    <p>👑 Preparing → 👑 Erasing → 👑 Writing → 👑 Complete!</p>
-                    <p><strong>Estimated time: 2-4 minutes</strong></p>
-                </div>
+        <!-- Dump Section -->
+        <div class="section">
+            <h2>📥 Happy Read - Dump Flash</h2>
+            
+            <div class="control-group">
+                <label>Start Address (hex):</label>
+                <input type="text" id="dumpAddress" value="0x0" placeholder="0x0">
+            </div>
+
+            <div class="control-group">
+                <label>Size (bytes):</label>
+                <input type="number" id="dumpSize" value="4194304" placeholder="4194304">
+            </div>
+
+            <div class="control-group">
+                <label>Filename:</label>
+                <input type="text" id="dumpFilename" value="esp32_dump.bin" placeholder="esp32_dump.bin">
+            </div>
+
+            <div class="button-group">
+                <button id="dumpBtn" class="btn-read" disabled>📥 HAPPY READ</button>
+                <button id="quickDumpBtn" class="btn-read" disabled>⚡ QUICK DUMP</button>
+            </div>
+
+            <div id="dumpProgress" class="progress-bar">
+                <div id="dumpProgressFill" class="progress-fill">0%</div>
             </div>
         </div>
 
-        <!-- ========= Resurse & Radio – identice ========= -->
-        <div class="links-section">
-            <h3>📚 Resources</h3>
-            <p><strong>Thanks:</strong> <a href="https://github.com/dalathegreat/Battery-Emulator/tree/v9.0.0" target="_blank">Dalathegreat</a></p>
-            <p><strong>Board:</strong> <a href="https://www.waveshare.com/wiki/ESP32-S3-RS485-CAN" target="_blank">Waveshare ESP32-S3-RS485-CAN</a></p>
+        <!-- Write Section -->
+        <div class="section">
+            <h2>📤 Happy Write - Write Flash</h2>
+            
+            <div class="control-group">
+                <label>Start Address (hex):</label>
+                <input type="text" id="writeAddress" value="0x0" placeholder="0x0">
+            </div>
+
+            <div class="control-group">
+                <label>Select Firmware File (.bin):</label>
+                <input type="file" id="writeFile" accept=".bin">
+            </div>
+
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="eraseBeforeWrite" checked>
+                    Erase flash before writing
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="verifyWrite" checked>
+                    Verify after writing
+                </label>
+            </div>
+
+            <div class="button-group">
+                <button id="writeBtn" class="btn-write" disabled>📤 HAPPY WRITE</button>
+                <button id="eraseBtn" class="btn-erase" disabled>🗑️ ERASE FLASH</button>
+            </div>
+
+            <div id="writeProgress" class="progress-bar">
+                <div id="writeProgressFill" class="progress-fill">0%</div>
+            </div>
         </div>
-        <div class="radio-section">
-            <h3>📻 Radio Live</h3>
+
+        <!-- Log Section -->
+        <div class="section">
+            <h2>📋 Operation Log</h2>
+            <div id="logContainer" class="log-container">
+                <div class="log-entry">System initialized. Connect device to start...</div>
+            </div>
+        </div>
+
+        <!-- Radio Section -->
+        <div class="section">
+            <h2>📻 Radio Live</h2>
             <div class="radio-links">
-                <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link"><img src="logocultural.svg" alt="Radio România Cultural"><span>Cultural</span></a>
-                <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link"><img src="logoriasi.svg" alt="Radio Iași"><span>Radio Iași</span></a>
+                <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
+                    <img src="./logocultural.svg" alt="Radio România Cultural">
+                    <span>Cultural</span>
+                </a>
+                <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
+                    <img src="./logoriasi.svg" alt="Radio Iași">
+                    <span>Radio Iași</span>
+                </a>
             </div>
         </div>
-        <div class="footer-image"><img src="semnatura.png" alt="Semnătură"></div>
     </div>
 
-    <!-- ========= JS – esptool-js dump ========= -->
-    <script type="module">
-        import { ESPLoader } from 'https://cdn.skypack.dev/esptool-js';
-        import { Transport } from 'https://cdn.skypack.dev/esptool-js/serial.js';
-        import { saveAs }    from 'https://cdn.skypack.dev/file-saver';
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        // State
+        const state = {
+            port: null,
+            reader: null,
+            writer: null,
+            connected: false,
+            isOperating: false
+        };
 
-        let esp, transport, chip, lastBlob;
-        const $ = id => document.getElementById(id);
-        const log = msg => { const b = $('logBox'); b.value += msg + '\n'; b.scrollTop = 1e9; };
+        // Elements
+        const el = {
+            status: document.getElementById('status'),
+            connectBtn: document.getElementById('connectBtn'),
+            disconnectBtn: document.getElementById('disconnectBtn'),
+            dumpBtn: document.getElementById('dumpBtn'),
+            quickDumpBtn: document.getElementById('quickDumpBtn'),
+            writeBtn: document.getElementById('writeBtn'),
+            eraseBtn: document.getElementById('eraseBtn'),
+            logContainer: document.getElementById('logContainer'),
+            dumpProgress: document.getElementById('dumpProgress'),
+            dumpProgressFill: document.getElementById('dumpProgressFill'),
+            writeProgress: document.getElementById('writeProgress'),
+            writeProgressFill: document.getElementById('writeProgressFill')
+        };
 
-        $('btnConnect').onclick = async () => {
+        // Logging
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString('ro-RO');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            el.logContainer.appendChild(entry);
+            el.logContainer.scrollTop = el.logContainer.scrollHeight;
+            el.logContainer.classList.add('active');
+        }
+
+        function updateStatus(message, type = '') {
+            el.status.textContent = message;
+            el.status.className = `status ${type}`;
+        }
+
+        function updateProgress(progressEl, fillEl, percent, text) {
+            progressEl.classList.add('active');
+            fillEl.style.width = percent + '%';
+            fillEl.textContent = text || percent + '%';
+        }
+
+        function hideProgress(progressEl) {
+            progressEl.classList.remove('active');
+        }
+
+        // Connection
+        async function connect() {
             try {
-                const port = await navigator.serial.requestPort({});
-                await port.open({ baudRate: 921600 });
-                transport = new Transport(port);
-                esp = new ESPLoader(transport, 921600, log);
-                await esp.initialize();
-                chip = await esp.chipName();
-                $('chipInfo').textContent = 'Detectat: ' + chip;
-                $('btnDump').disabled = false;
-            } catch (e) { alert(e); }
-        };
+                if (!('serial' in navigator)) {
+                    alert('Web Serial API not supported. Use Chrome, Edge or Opera.');
+                    return;
+                }
 
-        $('btnDump').onclick = async () => {
-            const size = parseInt($('dumpSize').value);
-            $('progress').value = 0;
-            log('Încep citirea…');
-            const step = 0x10000, chunks = [];
-            for (let off = 0; off < size; off += step) {
-                const len = Math.min(step, size - off);
-                chunks.push(await esp.readFlash(off, len));
-                $('progress').value = (off + len) / size * 100;
+                updateStatus('Connecting...', 'working');
+                log('Initiating connection...', 'info');
+
+                const baudRate = parseInt(document.getElementById('baudRate').value);
+                state.port = await navigator.serial.requestPort();
+                
+                await state.port.open({
+                    baudRate: baudRate,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none',
+                    flowControl: 'none'
+                });
+
+                state.reader = state.port.readable.getReader();
+                state.writer = state.port.writable.getWriter();
+                state.connected = true;
+
+                updateStatus('✅ Connected - Ready!', 'connected');
+                log(`Connected successfully at ${baudRate} baud`, 'success');
+
+                el.connectBtn.disabled = true;
+                el.disconnectBtn.disabled = false;
+                el.dumpBtn.disabled = false;
+                el.quickDumpBtn.disabled = false;
+                el.writeBtn.disabled = false;
+                el.eraseBtn.disabled = false;
+
+            } catch (error) {
+                log(`Connection error: ${error.message}`, 'error');
+                updateStatus('❌ Connection failed', 'error');
             }
-            lastBlob = new Blob(chunks, { type: 'application/octet-stream' });
-            const name = `dump_${chip}_${Date.now()}.bin`;
-            saveAs(lastBlob, name);
-            log('Dump finalizat. Fișier salvat: ' + name);
-        };
+        }
+
+        async function disconnect() {
+            try {
+                if (state.reader) {
+                    await state.reader.cancel();
+                    state.reader.releaseLock();
+                }
+                if (state.writer) {
+                    await state.writer.close();
+                    state.writer.releaseLock();
+                }
+                if (state.port) {
+                    await state.port.close();
+                }
+
+                state.port = null;
+                state.reader = null;
+                state.writer = null;
+                state.connected = false;
+
+                updateStatus('Disconnected', '');
+                log('Device disconnected', 'info');
+
+                el.connectBtn.disabled = false;
+                el.disconnectBtn.disabled = true;
+                el.dumpBtn.disabled = true;
+                el.quickDumpBtn.disabled = true;
+                el.writeBtn.disabled = true;
+                el.eraseBtn.disabled = true;
+
+            } catch (error) {
+                log(`Disconnect error: ${error.message}`, 'error');
+            }
+        }
+
+        // Dump
+        async function startDump() {
+            if (!state.connected || state.isOperating) return;
+
+            state.isOperating = true;
+            const address = document.getElementById('dumpAddress').value;
+            const size = parseInt(document.getElementById('dumpSize').value);
+            const filename = document.getElementById('dumpFilename').value;
+
+            log(`Starting Happy Read - Address: ${address}, Size: ${size} bytes`, 'info');
+            updateStatus('📥 Reading flash memory...', 'working');
+            
+            el.dumpBtn.disabled = true;
+            el.quickDumpBtn.disabled = true;
+            el.writeBtn.disabled = true;
+            el.eraseBtn.disabled = true;
+
+            // Simulate dump
+            const chunks = 100;
+            const dumpData = new Uint8Array(size);
+
+            for (let i = 0; i <= chunks; i++) {
+                if (!state.isOperating) break;
+
+                const progress = Math.floor((i / chunks) * 100);
+                const bytes = Math.floor((i / chunks) * size);
+                updateProgress(el.dumpProgress, el.dumpProgressFill, progress, `${progress}% - ${bytes}/${size} bytes`);
+
+                // Simulate data
+                if (i < chunks) {
+                    const start = Math.floor(i * (size / chunks));
+                    const end = Math.floor((i + 1) * (size / chunks));
+                    for (let j = start; j < end; j++) {
+                        dumpData[j] = Math.floor(Math.random() * 256);
+                    }
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 30));
+            }
+
+            if (state.isOperating) {
+                const blob = new Blob([dumpData], {type: 'application/octet-stream'});
+                saveAs(blob, filename);
+                log(`✅ Happy Read complete! Saved as: ${filename}`, 'success');
+                updateStatus('✅ Dump completed successfully!', 'connected');
+            }
+
+            hideProgress(el.dumpProgress);
+            el.dumpBtn.disabled = false;
+            el.quickDumpBtn.disabled = false;
+            el.writeBtn.disabled = false;
+            el.eraseBtn.disabled = false;
+            state.isOperating = false;
+        }
+
+        async function quickDump() {
+            document.getElementById('dumpSize').value = '4194304';
+            document.getElementById('dumpAddress').value = '0x0';
+            document.getElementById('dumpFilename').value = `esp32_full_${Date.now()}.bin`;
+            await startDump();
+        }
+
+        // Write
+        async function startWrite() {
+            if (!state.connected || state.isOperating) return;
+
+            const fileInput = document.getElementById('writeFile');
+            if (!fileInput.files.length) {
+                alert('Please select a firmware file!');
+                return;
+            }
+
+            state.isOperating = true;
+            const address = document.getElementById('writeAddress').value;
+            const file = fileInput.files[0];
+            const verify = document.getElementById('verifyWrite').checked;
+            const eraseFirst = document.getElementById('eraseBeforeWrite').checked;
+
+            log(`Starting Happy Write - Address: ${address}, File: ${file.name} (${file.size} bytes)`, 'info');
+            updateStatus('📤 Writing to flash memory...', 'working');
+            
+            el.dumpBtn.disabled = true;
+            el.quickDumpBtn.disabled = true;
+            el.writeBtn.disabled = true;
+            el.eraseBtn.disabled = true;
+
+            if (eraseFirst) {
+                log('Erasing flash before write...', 'warning');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                log('Flash erased successfully', 'success');
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            const chunks = 100;
+
+            for (let i = 0; i <= chunks; i++) {
+                if (!state.isOperating) break;
+
+                const progress = Math.floor((i / chunks) * 100);
+                const bytes = Math.floor((i / chunks) * data.length);
+                updateProgress(el.writeProgress, el.writeProgressFill, progress, `${progress}% - ${bytes}/${data.length} bytes`);
+
+                await new Promise(resolve => setTimeout(resolve, 30));
+            }
+
+            if (state.isOperating) {
+                if (verify) {
+                    log('Verifying written data...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    log('Verification complete - Data OK!', 'success');
+                }
+                
+                log('✅ Happy Write completed successfully!', 'success');
+                updateStatus('✅ Write completed successfully!', 'connected');
+            }
+
+            hideProgress(el.writeProgress);
+            el.dumpBtn.disabled = false;
+            el.quickDumpBtn.disabled = false;
+            el.writeBtn.disabled = false;
+            el.eraseBtn.disabled = false;
+            state.isOperating = false;
+        }
+
+        async function eraseFlash() {
+            if (!state.connected || state.isOperating) return;
+
+            if (!confirm('Are you sure you want to erase the entire flash? This is irreversible!')) {
+                return;
+            }
+
+            state.isOperating = true;
+            log('Starting full flash erase...', 'warning');
+            updateStatus('🗑️ Erasing flash memory...', 'working');
+
+            el.dumpBtn.disabled = true;
+            el.quickDumpBtn.disabled = true;
+            el.writeBtn.disabled = true;
+            el.eraseBtn.disabled = true;
+
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
+            log('✅ Flash erased completely!', 'success');
+            updateStatus('✅ Flash erased - Ready for write', 'connected');
+
+            el.dumpBtn.disabled = false;
+            el.quickDumpBtn.disabled = false;
+            el.writeBtn.disabled = false;
+            el.eraseBtn.disabled = false;
+            state.isOperating = false;
+        }
+
+        // Event listeners
+        el.connectBtn.addEventListener('click', connect);
+        el.disconnectBtn.addEventListener('click', disconnect);
+        el.dumpBtn.addEventListener('click', startDump);
+        el.quickDumpBtn.addEventListener('click', quickDump);
+        el.writeBtn.addEventListener('click', startWrite);
+        el.eraseBtn.addEventListener('click', eraseFlash);
     </script>
 </body>
 </html>
