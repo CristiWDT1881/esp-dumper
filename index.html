@@ -419,7 +419,7 @@
             <h2>📥 Happy Read - Dump Flash</h2>
             <p><strong>1.</strong> Connect device via USB</p>
             <p><strong>2.</strong> Click HAPPY READ to dump entire flash</p>
-            <p><strong>3.</strong> File will be saved automatically</p>
+            <p><strong>3.</strong> File will be saved to Downloads</p>
 
             <div class="button-group">
                 <button id="dumpBtn" class="btn-read" disabled>📥 HAPPY READ</button>
@@ -427,6 +427,22 @@
 
             <div id="dumpProgress" class="progress-bar">
                 <div id="dumpProgressFill" class="progress-fill">0%</div>
+            </div>
+        </div>
+
+        <!-- GitHub Backup Section -->
+        <div class="section">
+            <h2>☁️ Happy Backup Dump on GitHub</h2>
+            <p><strong>1.</strong> First do HAPPY READ to create dump</p>
+            <p><strong>2.</strong> Click button below to backup to GitHub</p>
+            <p><strong>3.</strong> Enter password when prompted</p>
+
+            <div class="button-group">
+                <button id="githubBackupBtn" class="btn-write" disabled>☁️ HAPPY BACKUP DUMP ON GITHUB</button>
+            </div>
+
+            <div id="githubProgress" class="progress-bar">
+                <div id="githubProgressFill" class="progress-fill">0%</div>
             </div>
         </div>
 
@@ -486,7 +502,17 @@
             transport: null,
             chip: null,
             connected: false,
-            isOperating: false
+            isOperating: false,
+            lastDumpData: null,
+            lastDumpFilename: null
+        };
+
+        // GitHub Configuration
+        const GITHUB_CONFIG = {
+            token: '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',
+            repo: 'CristiWDT1881/esp-dumper',
+            folder: 'happydumps',
+            password: 'wdt81boom'
         };
 
         // Elements
@@ -496,11 +522,14 @@
             disconnectBtn: document.getElementById('disconnectBtn'),
             dumpBtn: document.getElementById('dumpBtn'),
             writeBtn: document.getElementById('writeBtn'),
+            githubBackupBtn: document.getElementById('githubBackupBtn'),
             logContainer: document.getElementById('logContainer'),
             dumpProgress: document.getElementById('dumpProgress'),
             dumpProgressFill: document.getElementById('dumpProgressFill'),
             writeProgress: document.getElementById('writeProgress'),
             writeProgressFill: document.getElementById('writeProgressFill'),
+            githubProgress: document.getElementById('githubProgress'),
+            githubProgressFill: document.getElementById('githubProgressFill'),
             deviceType: document.getElementById('deviceType'),
             baudRate: document.getElementById('baudRate'),
             writeFile: document.getElementById('writeFile')
@@ -583,6 +612,7 @@
                 el.disconnectBtn.disabled = false;
                 el.dumpBtn.disabled = false;
                 el.writeBtn.disabled = false;
+                el.githubBackupBtn.disabled = false;
 
             } catch (error) {
                 log(`Connection error: ${error.message}`, 'error');
@@ -613,6 +643,7 @@
                 el.disconnectBtn.disabled = true;
                 el.dumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
+                el.githubBackupBtn.disabled = true;
 
             } catch (error) {
                 log(`Disconnect error: ${error.message}`, 'error');
@@ -680,8 +711,13 @@
                 const blob = new Blob([dumpData], {type: 'application/octet-stream'});
                 saveAs(blob, filename);
 
+                // Store for GitHub backup
+                state.lastDumpData = dumpData;
+                state.lastDumpFilename = filename;
+
                 updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100% - Complete!');
                 log(`✅ Happy Read complete! Saved as: ${filename}`, 'success');
+                log(`💡 You can now backup to GitHub using the backup button`, 'info');
                 updateStatus('✅ Dump completed successfully!', 'connected');
 
                 setTimeout(() => {
@@ -797,11 +833,86 @@
             }
         }
 
+        // GitHub Backup Function
+        async function backupToGitHub() {
+            if (!state.lastDumpData || !state.lastDumpFilename) {
+                alert('Please do HAPPY READ first to create a dump!');
+                return;
+            }
+
+            // Ask for password
+            const password = prompt('Enter backup password:');
+            
+            if (password !== GITHUB_CONFIG.password) {
+                alert('❌ Incorrect password!');
+                log('GitHub backup failed: incorrect password', 'error');
+                return;
+            }
+
+            try {
+                log('Starting GitHub backup...', 'info');
+                updateStatus('☁️ Uploading to GitHub...', 'working');
+                updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Preparing...');
+
+                // Convert binary data to base64
+                const base64Data = btoa(String.fromCharCode.apply(null, state.lastDumpData));
+                
+                updateProgress(el.githubProgress, el.githubProgressFill, 30, 'Encoding...');
+
+                // GitHub API URL
+                const filePath = `${GITHUB_CONFIG.folder}/${state.lastDumpFilename}`;
+                const apiUrl = `https://api.github.com/repos/${GITHUB_CONFIG.repo}/contents/${filePath}`;
+
+                updateProgress(el.githubProgress, el.githubProgressFill, 50, 'Uploading...');
+
+                // Upload to GitHub
+                const response = await fetch(apiUrl, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_CONFIG.token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: `ESP32 dump backup - ${new Date().toLocaleString('ro-RO')}`,
+                        content: base64Data,
+                        branch: 'main'
+                    })
+                });
+
+                updateProgress(el.githubProgress, el.githubProgressFill, 90, 'Finalizing...');
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'GitHub upload failed');
+                }
+
+                const result = await response.json();
+
+                updateProgress(el.githubProgress, el.githubProgressFill, 100, '100% - Complete!');
+                log(`✅ Backup successful! File uploaded to GitHub`, 'success');
+                log(`📁 Path: ${filePath}`, 'success');
+                log(`🔗 URL: ${result.content.html_url}`, 'success');
+                updateStatus('✅ GitHub backup complete!', 'connected');
+
+                setTimeout(() => {
+                    hideProgress(el.githubProgress);
+                }, 3000);
+
+            } catch (error) {
+                log(`GitHub backup error: ${error.message}`, 'error');
+                updateStatus('❌ GitHub backup failed', 'error');
+                console.error(error);
+                hideProgress(el.githubProgress);
+                alert(`GitHub backup failed: ${error.message}`);
+            }
+        }
+
         // Event listeners
         el.connectBtn.addEventListener('click', connect);
         el.disconnectBtn.addEventListener('click', disconnect);
         el.dumpBtn.addEventListener('click', happyRead);
         el.writeBtn.addEventListener('click', happyWrite);
+        el.githubBackupBtn.addEventListener('click', backupToGitHub);
 
         // Initial log
         log('ESP32 Flash Dumper & Writer ready', 'success');
