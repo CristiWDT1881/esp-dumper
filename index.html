@@ -57,8 +57,8 @@
         .section {
             background: #B3D9F2;
             border-radius: 15px;
-            padding: 15px 25px;
-            margin-bottom: 20px;
+            padding: 10px 20px;
+            margin-bottom: 15px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.3);
             border: 4px solid #5B9BD5;
         }
@@ -67,7 +67,7 @@
             display: flex;
             gap: 20px;
             align-items: flex-start;
-            padding: 15px 25px;
+            padding: 10px 20px;
         }
 
         .section-content {
@@ -84,17 +84,17 @@
 
         .section h2 {
             color: #1a5f3f;
-            font-size: 1.5em;
+            font-size: 1.3em;
             font-weight: bold;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .section p {
             color: #000;
-            font-size: 1.1em;
+            font-size: 0.95em;
             font-weight: 500;
-            margin-bottom: 8px;
-            padding: 8px;
+            margin-bottom: 5px;
+            padding: 5px;
             border-radius: 8px;
         }
 
@@ -104,21 +104,21 @@
         }
 
         .control-group {
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .control-group label {
             color: #1a5f3f;
-            font-size: 1em;
+            font-size: 0.95em;
             font-weight: bold;
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
         .control-group select {
             width: 100%;
-            padding: 8px;
-            font-size: 1em;
+            padding: 6px;
+            font-size: 0.95em;
             border: 3px solid #5B9BD5;
             border-radius: 8px;
             background: white;
@@ -126,8 +126,8 @@
 
         .control-group input[type="file"] {
             width: 100%;
-            padding: 8px;
-            font-size: 1em;
+            padding: 6px;
+            font-size: 0.95em;
             border: 3px solid #5B9BD5;
             border-radius: 8px;
             background: white;
@@ -135,94 +135,79 @@
 
         .button-group {
             display: flex;
-            gap: 10px;
-            margin-top: 12px;
+            gap: 8px;
+            margin-top: 8px;
             flex-wrap: wrap;
         }
 
         button {
             flex: 1;
             min-width: 180px;
-            padding: 15px 25px;
-            font-size: 1.2em;
+            padding: 12px 20px;
+            font-size: 1.1em;
             font-weight: bold;
             border: none;
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.3s;
             box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-            color: white;
+            color: #000;
+            background: #5B9BD5;
         }
 
         .btn-connect {
-            background: #28a745;
+            background: #1a5f3f;
+            color: white;
         }
 
         .btn-connect:hover {
-            background: #218838;
+            background: #145030;
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.5);
+            box-shadow: 0 8px 25px rgba(26, 95, 63, 0.5);
         }
 
         .btn-disconnect {
             background: #6c757d;
+            color: white;
         }
 
-        .btn-read {
-            background: #007bff;
-        }
-
-        .btn-read:hover {
-            animation: blinkBlue 0.6s infinite;
-            transform: translateY(-2px);
-        }
-
+        .btn-read,
         .btn-write {
-            background: #dc3545;
+            background: #5B9BD5;
+            color: #000;
         }
 
+        .btn-read:hover,
         .btn-write:hover {
-            animation: blinkColors 0.6s infinite;
+            background: #FFD700;
             transform: translateY(-2px);
-        }
-
-        @keyframes blinkColors {
-            0% { background: #dc3545; }
-            50% { background: #5B9BD5; }
-            100% { background: #dc3545; }
-        }
-
-        @keyframes blinkBlue {
-            0% { background: #007bff; }
-            50% { background: #5B9BD5; }
-            100% { background: #007bff; }
+            box-shadow: 0 8px 25px rgba(91, 155, 213, 0.5);
         }
 
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none !important;
-            animation: none !important;
         }
 
         .status {
             background: white;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             border: 3px solid #5B9BD5;
             color: #000;
-            font-size: 1em;
+            font-size: 0.95em;
             font-weight: 500;
         }
 
         .status.connected {
-            border-color: #28a745;
+            border-color: #1a5f3f;
             background: #d4edda;
         }
 
         .status.working {
-            border-color: #ffc107;
+            border-color: #FFD700;
             background: #fff3cd;
         }
 
@@ -233,12 +218,12 @@
 
         .progress-bar {
             width: 100%;
-            height: 30px;
+            height: 25px;
             background: white;
             border-radius: 8px;
             border: 3px solid #5B9BD5;
             overflow: hidden;
-            margin: 12px 0;
+            margin: 8px 0;
             display: none;
         }
 
@@ -248,7 +233,7 @@
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #28a745, #5B9BD5);
+            background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
             width: 0%;
             transition: width 0.3s;
             display: flex;
@@ -256,7 +241,7 @@
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 1em;
+            font-size: 0.95em;
         }
 
         .log-container {
