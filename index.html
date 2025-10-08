@@ -1,113 +1,143 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ro">
 <head>
-  <meta charset="utf-8"/>
-  <title>WDT81 ESP Dumper</title>
-  <link rel="stylesheet" href="assets/style.css">   <!-- refolosești CSS-ul existent -->
-  <script src="https://cdn.skypack.dev/file-saver@2"></script>
-  <style>
-    /* suprascrieri minime */
-    .dump-section { background:#B3D9F2; border:4px solid #5B9BD5; border-radius:15px; padding:25px; margin:30px auto; max-width:700px; box-shadow:0 8px 30px rgba(0,0,0,.3);}
-    .dump-section h2 { color:#1a5f3f; margin-bottom:15px; }
-    progress { width:100%; height:22px; }
-    #logBox { width:100%; height:120px; font-family:monospace; font-size:12px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WDT81 ESP Dumper & Installer</title>
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Segoe UI',Arial,sans-serif;background:#1a5f3f;color:#fff;min-height:100vh;padding:20px;display:flex;flex-direction:column;align-items:center;}
+        .header-images{display:flex;justify-content:space-between;align-items:flex-start;width:100%;max-width:700px;margin-bottom:40px;}
+        .header-images img{max-width:180px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.3);border:4px solid #5B9BD5;}
+        .logo-center{text-align:center;margin-bottom:20px;}
+        .logo-center img{max-width:200px;height:auto;}
+        .container{max-width:700px;width:100%;}
+        h1{color:#FFD700;font-size:2.8em;font-weight:bold;text-align:center;margin-bottom:30px;text-shadow:2px 2px 4px rgba(0,0,0,.3);}
+        .install-section{background:#B3D9F2;border-radius:15px;padding:25px;margin-bottom:30px;box-shadow:0 8px 30px rgba(0,0,0,.3);border:4px solid #5B9BD5;color:#000;}
+        .install-section.first-box{display:flex;gap:20px;align-items:flex-start;padding:30px;}
+        .install-content{flex:1;}
+        .signature-img{width:130px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.2);border:4px solid #5B9BD5;}
+        .install-section h2{color:#1a5f3f;font-size:1.8em;font-weight:bold;margin-bottom:20px;}
+        .install-section p{color:#000;font-size:1.3em;font-weight:500;margin-bottom:12px;padding:10px;border-radius:8px;}
+        .install-section strong{color:#FFD700;font-weight:bold;}
+        .dump-box{margin-top:20px;padding:20px;background:#dff0f8;border-radius:10px;border:2px solid #5B9BD5;}
+        .dump-box h3{color:#1a5f3f;margin-bottom:10px;}
+        .dump-box button{background:#dc3545;color:#fff;border:none;padding:12px 24px;font-size:1.1em;font-weight:bold;border-radius:8px;cursor:pointer;transition:.3s;}
+        .dump-box button:hover{animation:blink .6s infinite;transform:translateY(-2px);}
+        @keyframes blink{0%,100%{background:#dc3545}50%{background:#5B9BD5}}
+        progress{width:100%;height:22px;margin-top:10px;}
+        #logBox{width:100%;height:100px;font-family:monospace;font-size:12px;margin-top:10px;}
+        .links-section,.radio-section{background:#B3D9F2;border-radius:15px;padding:25px;margin-top:30px;box-shadow:0 8px 30px rgba(0,0,0,.3);border:4px solid #5B9BD5;color:#000;}
+        .links-section h3,.radio-section h3{color:#1a5f3f;font-size:1.5em;font-weight:bold;margin-bottom:15px;}
+        .radio-links{display:flex;justify-content:space-around;gap:30px;flex-wrap:wrap;}
+        .radio-link{display:flex;flex-direction:column;align-items:center;text-decoration:none;transition:transform .3s;}
+        .radio-link:hover{transform:scale(1.1);}
+        .radio-link img{width:120px;height:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.2);border:4px solid #5B9BD5;}
+        .radio-link span{color:#000;font-weight:bold;font-size:1.1em;}
+        .footer-image{text-align:right;margin-top:20px;}
+        .footer-image img{max-width:200px;height:auto;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,.3);}
+        @media(max-width:768px){.header-images{flex-direction:column;align-items:center;gap:15px}h1{font-size:2em}.install-section p{font-size:1.1em}}
+    </style>
 </head>
 <body>
-  <div class="header-images"> … </div>   <!-- refolosești fragmente -->
-  <div class="container">
-     <h1>WDT81 <strong>Universal ESP Dumper</strong></h1>
+    <div class="header-images">
+        <img src="palatiasi.png" alt="Palatul Culturii">
+        <img src="logo.png" alt="Logo">
+    </div>
+    <div class="container">
+        <h1>WDT81 <strong>ESP Dumper & Installer</strong></h1>
 
-     <div class="dump-section">
-       <h2>1. Conectare</h2>
-       <p>Selectați portul serial și viteza (default 921 600):</p>
-       <button id="btnConnect">🔗 CONNECT</button>
-       <span id="chipInfo"></span>
-     </div>
+        <!-- ========= 1. DUMP (read) ========= -->
+        <div class="install-section">
+            <div class="install-content">
+                <h2>1. Connect & Dump</h2>
+                <p><strong>1.</strong> Connect <strong>any ESP</strong> via USB</p>
+                <p><strong>2.</strong> Click <strong>Connect</strong></p>
+                <p><strong>3.</strong> Press <strong>START DUMP</strong></p>
+                <p><strong>4.</strong> Save <code>.bin</code> to PC</p>
+                <div class="dump-box">
+                    <button id="btnConnect">🔗 Connect</button>
+                    <span id="chipInfo" style="margin-left:10px;font-weight:bold"></span><br/>
+                    <label>Size (bytes): <input id="dumpSize" type="number" value="0x400000"/></label><br/>
+                    <button id="btnDump" disabled>💾 START DUMP</button>
+                    <progress id="progress" value="0" max="100"></progress>
+                    <textarea id="logBox" readonly placeholder="Log..."></textarea>
+                </div>
+            </div>
+            <img src="semnatura.png" alt="Signature" class="signature-img">
+        </div>
 
-     <div class="dump-section">
-       <h2>2. Dump flash</h2>
-       <label>Dimensiune (octeți): <input id="dumpSize" type="number" value="0x400000"/></label><br/>
-       <button id="btnDump" disabled>💾 START DUMP</button>
-       <progress id="progress" value="0" max="100"></progress>
-     </div>
+        <!-- ========= 2. WRITE (instalare) – neschimbat ========= -->
+        <div class="install-section">
+            <div class="install-content">
+                <h2>2. Flash Firmware (Write)</h2>
+                <p>Connect Waveshare ESP32-S3, then:</p>
+                <esp-web-install-button manifest="manifest.json">
+                    <button slot="activate">HAPPY DUMP & INSTALL</button>
+                    <span slot="unsupported" style="color:#FFD700;font-weight:bold">❌ Use Chrome, Edge or Opera</span>
+                </esp-web-install-button>
+                <div class="progress-info">
+                    <p>👑 Preparing → 👑 Erasing → 👑 Writing → 👑 Complete!</p>
+                    <p><strong>Estimated time: 2-4 minutes</strong></p>
+                </div>
+            </div>
+        </div>
 
-     <div class="dump-section">
-       <h2>3. Salvare & GitHub</h2>
-       <label><input id="chkGitHub" type="checkbox"/>  Încarcă automat pe GitHub</label><br/>
-       <input id="token" type="password" placeholder="GitHub Personal Access Token"/>
-       <button id="btnSave" disabled>💻 SAVE .BIN</button>
-       <div id="gitLink"></div>
-     </div>
+        <!-- ========= Resurse & Radio – identice ========= -->
+        <div class="links-section">
+            <h3>📚 Resources</h3>
+            <p><strong>Thanks:</strong> <a href="https://github.com/dalathegreat/Battery-Emulator/tree/v9.0.0" target="_blank">Dalathegreat</a></p>
+            <p><strong>Board:</strong> <a href="https://www.waveshare.com/wiki/ESP32-S3-RS485-CAN" target="_blank">Waveshare ESP32-S3-RS485-CAN</a></p>
+        </div>
+        <div class="radio-section">
+            <h3>📻 Radio Live</h3>
+            <div class="radio-links">
+                <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link"><img src="logocultural.svg" alt="Radio România Cultural"><span>Cultural</span></a>
+                <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link"><img src="logoriasi.svg" alt="Radio Iași"><span>Radio Iași</span></a>
+            </div>
+        </div>
+        <div class="footer-image"><img src="semnatura.png" alt="Semnătură"></div>
+    </div>
 
-     <textarea id="logBox" readonly></textarea>
-  </div>
+    <!-- ========= JS – esptool-js dump ========= -->
+    <script type="module">
+        import { ESPLoader } from 'https://cdn.skypack.dev/esptool-js';
+        import { Transport } from 'https://cdn.skypack.dev/esptool-js/serial.js';
+        import { saveAs }    from 'https://cdn.skypack.dev/file-saver';
 
-<script type="module">
-import { ESPLoader } from 'https://cdn.skypack.dev/esptool-js';
-import { Transport } from 'https://cdn.skypack.dev/esptool-js/serial.js';
-import { saveAs } from 'https://cdn.skypack.dev/file-saver';
+        let esp, transport, chip, lastBlob;
+        const $ = id => document.getElementById(id);
+        const log = msg => { const b = $('logBox'); b.value += msg + '\n'; b.scrollTop = 1e9; };
 
-let esp, transport, chip, lastBlob;
+        $('btnConnect').onclick = async () => {
+            try {
+                const port = await navigator.serial.requestPort({});
+                await port.open({ baudRate: 921600 });
+                transport = new Transport(port);
+                esp = new ESPLoader(transport, 921600, log);
+                await esp.initialize();
+                chip = await esp.chipName();
+                $('chipInfo').textContent = 'Detectat: ' + chip;
+                $('btnDump').disabled = false;
+            } catch (e) { alert(e); }
+        };
 
-const $ = id => document.getElementById(id);
-const log = msg => { $('logBox').value += msg + '\n'; $('logBox').scrollTop = 1e9; };
-
-$('btnConnect').onclick = async () => {
-  try {
-    const port = await navigator.serial.requestPort({});
-    await port.open({ baudRate: 921600 });
-    transport = new Transport(port);
-    esp = new ESPLoader(transport, 921600, log);
-    await esp.initialize();
-    chip = await esp.chipName();
-    $('chipInfo').textContent = `Detectat: ${chip}`;
-    $('btnDump').disabled = false;
-  } catch(e) { alert(e); }
-};
-
-$('btnDump').onclick = async () => {
-  const size = parseInt($('dumpSize').value);
-  $('progress').value = 0;
-  log('Încep citirea…');
-  const step = 0x10000, chunks = [];
-  for(let off = 0; off < size; off += step) {
-    const len = Math.min(step, size - off);
-    const data = await esp.readFlash(off, len);
-    chunks.push(data);
-    $('progress').value = (off + len) / size * 100;
-  }
-  lastBlob = new Blob(chunks, {type:'application/octet-stream'});
-  const name = `dump_${chip}_${Date.now()}.bin`;
-  saveAs(lastBlob, name);
-  $('btnSave').disabled = false;
-  log('Dump finalizat. Salvați local sau încărcați pe GitHub.');
-};
-
-$('btnSave').onclick = async () => {
-  if(!$('chkGitHub').checked) return;
-  const token = $('token').value.trim();
-  if(!token) { alert('Introduceți token GitHub'); return; }
-  const owner = 'CristiWDT1881', repo = 'esp-dumps';   // ← schimbă cu ale tale
-  const path = `dumps/dump_${chip}_${Date.now()}.bin`;
-  const content = await blobToBase64(lastBlob);
-  const body = {
-    message: `Add dump ${chip} ${new Date().toISOString()}`,
-    content: content.split(',')[1]   // scoate prefixul data:*;base64,
-  };
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-  const r = await fetch(url, {
-    method:'PUT',
-    headers:{ 'Authorization':`token ${token}`, 'Content-Type':'application/json' },
-    body:JSON.stringify(body)
-  });
-  if(r.ok) {
-    const j = await r.json();
-    $('gitLink').innerHTML = `✅ Upload reușit: <a href="${j.content.download_url}" target="_blank">${j.content.name}</a>`;
-  } else { alert('Eroare upload: ' + r.statusText); }
-};
-
-async function blobToBase64(b){ return new Promise(r=>{const rd=new FileReader();rd.onloadend=()=>r(rd.result);rd.readAsDataURL(b);});}
-</script>
+        $('btnDump').onclick = async () => {
+            const size = parseInt($('dumpSize').value);
+            $('progress').value = 0;
+            log('Încep citirea…');
+            const step = 0x10000, chunks = [];
+            for (let off = 0; off < size; off += step) {
+                const len = Math.min(step, size - off);
+                chunks.push(await esp.readFlash(off, len));
+                $('progress').value = (off + len) / size * 100;
+            }
+            lastBlob = new Blob(chunks, { type: 'application/octet-stream' });
+            const name = `dump_${chip}_${Date.now()}.bin`;
+            saveAs(lastBlob, name);
+            log('Dump finalizat. Fișier salvat: ' + name);
+        };
+    </script>
 </body>
 </html>
