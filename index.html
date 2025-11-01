@@ -804,46 +804,12 @@
                 
                 state.connected = true;
 
-                // Get chip info - handle both old and new API
-                let chipType;
-                if (typeof state.esploader.chipName === 'function') {
-                    chipType = await state.esploader.chipName();
-                } else if (state.chip && state.chip.CHIP_NAME) {
-                    chipType = state.chip.CHIP_NAME;
-                } else if (state.chip) {
-                    chipType = state.chip;
-                } else {
-                    chipType = 'Unknown';
-                }
+                // Get chip info - simplified
+                const chipInfo = state.chip || state.esploader.chip || {};
+                const chipType = chipInfo.CHIP_NAME || chipInfo.name || el.deviceType.value;
                 
-                // Get MAC address
-                let macAddr = 'Unknown';
-                try {
-                    if (typeof state.esploader.macAddr === 'function') {
-                        macAddr = await state.esploader.macAddr();
-                    } else if (state.esploader.chip && state.esploader.chip.macAddr) {
-                        macAddr = await state.esploader.chip.macAddr();
-                    }
-                } catch (e) {
-                    console.log('Could not get MAC:', e);
-                }
-                
-                // Get flash size
-                let flashSize = 4; // Default to 4MB
-                try {
-                    if (typeof state.esploader.getFlashSize === 'function') {
-                        flashSize = await state.esploader.getFlashSize();
-                    } else if (state.esploader.chip && typeof state.esploader.chip.getFlashSize === 'function') {
-                        flashSize = await state.esploader.chip.getFlashSize();
-                    }
-                } catch (e) {
-                    console.log('Could not get flash size:', e);
-                }
-
+                log(`Connected to ${chipType}`, 'success');
                 updateStatus(`✅ Connected - ${chipType}`, 'connected');
-                log(`Chip: ${chipType}`, 'success');
-                log(`MAC: ${macAddr}`, 'success');
-                log(`Flash size: ${flashSize} MB`, 'success');
 
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
