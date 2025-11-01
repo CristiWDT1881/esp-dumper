@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -335,7 +334,13 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script type="module">
+        // Test dacă modulul se încarcă
+        console.log('Script loaded');
+        
         import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+        
+        console.log('ESPLoader imported:', ESPLoader);
+        console.log('Transport imported:', Transport);
 
         const state = { 
             port: null, 
@@ -404,11 +409,15 @@
         };
 
         async function connect() {
+            console.log('Connect function called!'); // DEBUG
             try {
                 if (!('serial' in navigator)) {
+                    console.error('Web Serial not supported');
                     alert('Web Serial API not supported! Use Chrome/Edge.');
                     return;
                 }
+                
+                console.log('Web Serial API available');
 
                 // Cleanup conexiune anterioară
                 if (state.transport) {
@@ -625,6 +634,9 @@
         el.dumpBtn.addEventListener('click', happyRead);
         el.writeBtn.addEventListener('click', happyWrite);
         el.githubBackupBtn.addEventListener('click', backupGitHub);
+        
+        console.log('Event listeners attached');
+        console.log('Connect button:', el.connectBtn);
 
         log('ESP32 Flash Dumper & Writer ready', 'success');
         log('Select device type and click CONNECT to start', 'info');
