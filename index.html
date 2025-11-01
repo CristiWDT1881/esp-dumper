@@ -347,8 +347,8 @@
 </head>
 <body>
     <div class="header-images">
-        <img src="./palatiasi.png" alt="Palatul Culturii">
-        <img src="./logo.png" alt="Logo">
+        <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
+        <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
     </div>
 
     <div class="container">
@@ -396,7 +396,7 @@
                     <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
                 </div>
             </div>
-            <img src="./semnatura.png" alt="Signature" class="signature-img">
+            <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
         </div>
 
         <!-- Dump Section -->
@@ -465,11 +465,11 @@
             <h2>📻 Radio Live</h2>
             <div class="radio-links">
                 <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
-                    <img src="./logocultural.svg" alt="Radio România Cultural">
+                    <img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
                     <span>Cultural</span>
                 </a>
                 <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
-                    <img src="./logoriasi.svg" alt="Radio Iași">
+                    <img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
                     <span>Radio Iași</span>
                 </a>
             </div>
@@ -547,10 +547,19 @@
             progressEl.classList.remove('active');
         }
 
-        // ESP Loader logger
-        function espLoaderTerminal(text) {
-            log(text, 'info');
-        }
+        // FIXED: Create proper terminal object with all required methods
+        const espLoaderTerminal = {
+            clean: () => {
+                // Clear terminal if needed
+                console.log('Terminal clean called');
+            },
+            writeLine: (text) => {
+                log(text, 'info');
+            },
+            write: (text) => {
+                log(text, 'info');
+            }
+        };
 
         // Connection
         async function connect() {
@@ -570,11 +579,11 @@
                 // Create transport
                 state.transport = new Transport(state.port);
                 
-                // Create ESPLoader
+                // Create ESPLoader with proper terminal object
                 state.esploader = new ESPLoader({
                     transport: state.transport,
                     baudrate: baudRate,
-                    terminal: espLoaderTerminal
+                    terminal: espLoaderTerminal  // Pass the object, not a function
                 });
 
                 log('Connecting to device...', 'info');
@@ -649,12 +658,12 @@
 
                 // Get flash size
                 const flashSize = await state.esploader.getFlashSize();
-                const flashSizeBytes = flashSize * 1024 * 1024; // Convert MB to bytes
+                const flashSizeBytes = flashSize * 1024 * 1024;
                 
                 log(`Flash size: ${flashSize} MB (${flashSizeBytes} bytes)`, 'info');
 
                 const address = 0x0;
-                const chunkSize = 4096; // Read in 4KB chunks
+                const chunkSize = 4096;
                 const totalChunks = Math.ceil(flashSizeBytes / chunkSize);
                 
                 const dumpData = new Uint8Array(flashSizeBytes);
@@ -666,14 +675,10 @@
                     const currentAddr = address + (i * chunkSize);
                     const readSize = Math.min(chunkSize, flashSizeBytes - offset);
                     
-                    // Read flash block
                     const block = await state.esploader.readFlash(currentAddr, readSize);
-                    
-                    // Copy to dump array
                     dumpData.set(new Uint8Array(block), offset);
                     offset += readSize;
 
-                    // Update progress
                     const progress = Math.floor((i / totalChunks) * 100);
                     updateProgress(
                         el.dumpProgress, 
@@ -682,13 +687,11 @@
                         `${progress}% - ${Math.floor(offset / 1024)} / ${Math.floor(flashSizeBytes / 1024)} KB`
                     );
 
-                    // Log every 10%
                     if (i % Math.floor(totalChunks / 10) === 0) {
                         log(`Progress: ${progress}% (${Math.floor(offset / 1024)} KB)`, 'info');
                     }
                 }
 
-                // Save file
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                 const chipName = await state.esploader.chipName();
                 const filename = `${chipName}_dump_${timestamp}.bin`;
@@ -696,7 +699,6 @@
                 const blob = new Blob([dumpData], {type: 'application/octet-stream'});
                 saveAs(blob, filename);
 
-                // Store for GitHub backup
                 state.lastDumpData = dumpData;
                 state.lastDumpFilename = filename;
 
@@ -731,7 +733,6 @@
                 return;
             }
 
-            // Ask to erase
             const shouldErase = confirm('Do you want to ERASE flash before writing?\n\n✅ YES - Full erase (recommended)\n❌ NO - Write without erasing');
 
             try {
@@ -742,7 +743,6 @@
                 log('Starting Happy Write...', 'info');
                 updateStatus('📤 Writing to flash...', 'working');
 
-                // Erase if requested
                 if (shouldErase) {
                     log('Erasing flash memory...', 'warning');
                     updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
@@ -752,7 +752,6 @@
                     log('✅ Flash erased successfully', 'success');
                 }
 
-                // Prepare file array for writing
                 const fileArray = [];
                 let totalSize = 0;
 
@@ -760,7 +759,6 @@
                     const arrayBuffer = await file.arrayBuffer();
                     const data = new Uint8Array(arrayBuffer);
                     
-                    // Try to detect offset from filename
                     let offset = 0x0;
                     if (file.name.includes('bootloader')) {
                         offset = 0x0;
@@ -779,7 +777,6 @@
                     log(`File: ${file.name} (${data.length} bytes) @ 0x${offset.toString(16)}`, 'info');
                 }
 
-                // Write files
                 log(`Writing ${fileArray.length} file(s), total ${totalSize} bytes...`, 'info');
 
                 await state.esploader.writeFlash({
@@ -825,7 +822,6 @@
                 return;
             }
 
-            // Ask for password
             const password = prompt('Enter backup password:');
             
             if (password !== GITHUB_CONFIG.password) {
@@ -839,18 +835,15 @@
                 updateStatus('☁️ Uploading to GitHub...', 'working');
                 updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Preparing...');
 
-                // Convert binary data to base64
                 const base64Data = btoa(String.fromCharCode.apply(null, state.lastDumpData));
                 
                 updateProgress(el.githubProgress, el.githubProgressFill, 30, 'Encoding...');
 
-                // GitHub API URL
                 const filePath = `${GITHUB_CONFIG.folder}/${state.lastDumpFilename}`;
                 const apiUrl = `https://api.github.com/repos/${GITHUB_CONFIG.repo}/contents/${filePath}`;
 
                 updateProgress(el.githubProgress, el.githubProgressFill, 50, 'Uploading...');
 
-                // Upload to GitHub
                 const response = await fetch(apiUrl, {
                     method: 'PUT',
                     headers: {
