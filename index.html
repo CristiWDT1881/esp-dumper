@@ -15,6 +15,21 @@
             flex-direction: column;
             align-items: center;
         }
+        .header-images {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+            max-width: 700px;
+            margin-bottom: 40px;
+        }
+        .header-images img {
+            max-width: 180px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 4px solid #5B9BD5;
+        }
         .container { max-width: 700px; width: 100%; }
         h1 {
             color: #FFD700;
@@ -29,6 +44,22 @@
             padding: 20px;
             margin-bottom: 15px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            border: 4px solid #5B9BD5;
+        }
+        .section.first-box {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            padding: 10px 20px;
+        }
+        .section-content {
+            flex: 1;
+        }
+        .signature-img {
+            width: 130px;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             border: 4px solid #5B9BD5;
         }
         .section h2 {
@@ -128,23 +159,87 @@
         .log-entry.success { color: #51cf66; }
         .log-entry.warning { color: #ffd43b; }
         .log-entry.info { color: #74c0fc; }
+        .radio-links {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .radio-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            transition: transform 0.3s;
+        }
+        .radio-link:hover {
+            transform: scale(1.1);
+        }
+        .radio-link img {
+            width: 120px;
+            height: 120px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin-bottom: 10px;
+            border: 4px solid #5B9BD5;
+        }
+        .radio-link span {
+            color: #000;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        @media (max-width: 768px) {
+            .header-images {
+                flex-direction: column;
+                align-items: center;
+                gap: 15px;
+            }
+            h1 { font-size: 2em; }
+        }
     </style>
 </head>
 <body>
+    <div class="header-images">
+        <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
+        <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
+    </div>
+
     <div class="container">
         <h1>ESP32 Flash Dumper & Writer</h1>
 
-        <div class="section">
-            <h2>📡 Connect Device</h2>
-            <div id="status" class="status">Status: Disconnected</div>
+        <div class="section first-box">
+            <div class="section-content">
+                <h2>📡 Connect Device</h2>
+                <div id="status" class="status">Status: Disconnected</div>
             
             <div class="control-group">
                 <label>Device Type:</label>
                 <select id="deviceType">
-                    <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN</option>
-                    <option value="ESP32-S3">ESP32-S3</option>
-                    <option value="ESP32">ESP32</option>
-                    <option value="ESP8266">ESP8266</option>
+                    <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN ⭐</option>
+                    <option value="ESP32-S3">ESP32-S3 (Generic, LilyGO)</option>
+                    <option value="ESP32-S3-DevKit">ESP32-S3-DevKitC</option>
+                    <option value="ESP32-S3-WROOM">ESP32-S3-WROOM-1/2</option>
+                    <option value="ESP32">ESP32 (DevKit, NodeMCU)</option>
+                    <option value="ESP32-WROOM">ESP32-WROOM-32</option>
+                    <option value="ESP32-WROVER">ESP32-WROVER</option>
+                    <option value="ESP32-S2">ESP32-S2</option>
+                    <option value="ESP32-C3">ESP32-C3 (RISC-V)</option>
+                    <option value="ESP32-C6">ESP32-C6</option>
+                    <option value="ESP32-H2">ESP32-H2</option>
+                    <option value="ESP32-T-CAN485">LilyGO T-CAN485</option>
+                    <option value="ESP32-TTGO">LilyGO TTGO T-Display</option>
+                    <option value="ESP8266">ESP8266 (NodeMCU, Wemos)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Flash Size:</label>
+                <select id="flashSize">
+                    <option value="4">4 MB</option>
+                    <option value="8">8 MB</option>
+                    <option value="16" selected>16 MB ⭐ (Waveshare ESP32-S3-RS485-CAN)</option>
+                    <option value="32">32 MB</option>
                 </select>
             </div>
 
@@ -152,7 +247,10 @@
                 <label>Baud Rate:</label>
                 <select id="baudRate">
                     <option value="115200">115200</option>
+                    <option value="230400">230400</option>
+                    <option value="460800">460800</option>
                     <option value="921600" selected>921600</option>
+                    <option value="1500000">1500000</option>
                 </select>
             </div>
 
@@ -160,6 +258,8 @@
                 <button id="connectBtn" class="btn-connect">CONNECT</button>
                 <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
             </div>
+            </div>
+            <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
         </div>
 
         <div class="section">
@@ -178,13 +278,13 @@
         </div>
 
         <div class="section">
-            <h2>☁️ Happy Backup to GitHub</h2>
-            <p><strong>1.</strong> First do HAPPY READ</p>
-            <p><strong>2.</strong> Click button to backup</p>
-            <p><strong>3.</strong> Enter password</p>
+            <h2>☁️ Happy Backup Dump on GitHub</h2>
+            <p><strong>1.</strong> First do HAPPY READ to create dump</p>
+            <p><strong>2.</strong> Click button below to backup to GitHub</p>
+            <p><strong>3.</strong> Enter password when prompted</p>
 
             <div class="button-group">
-                <button id="githubBackupBtn" class="btn-write" disabled>☁️ HAPPY BACKUP</button>
+                <button id="githubBackupBtn" class="btn-write" disabled>☁️ HAPPY BACKUP DUMP ON GITHUB</button>
             </div>
 
             <div id="githubProgress" class="progress-bar">
@@ -196,9 +296,10 @@
             <h2>📤 Happy Write - Write Flash</h2>
             <p><strong>1.</strong> Select firmware file (.bin)</p>
             <p><strong>2.</strong> Click HAPPY WRITE</p>
+            <p><strong>3.</strong> Choose erase option when prompted</p>
 
             <div class="control-group">
-                <label>Select Firmware:</label>
+                <label>Select Firmware File:</label>
                 <input type="file" id="writeFile" accept=".bin" multiple>
             </div>
 
@@ -212,9 +313,23 @@
         </div>
 
         <div class="section">
-            <h2>📋 Log</h2>
+            <h2>📋 Operation Log</h2>
             <div id="logContainer" class="log-container">
-                <div class="log-entry info">System ready. Click CONNECT to start.</div>
+                <div class="log-entry info">System initialized. Connect device to start...</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📻 Radio Live</h2>
+            <div class="radio-links">
+                <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
+                    <img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
+                    <span>Cultural</span>
+                </a>
+                <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
+                    <img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
+                    <span>Radio Iași</span>
+                </a>
             </div>
         </div>
     </div>
@@ -263,6 +378,7 @@
             githubProgress: document.getElementById('githubProgress'),
             githubProgressFill: document.getElementById('githubProgressFill'),
             deviceType: document.getElementById('deviceType'),
+            flashSize: document.getElementById('flashSize'),
             baudRate: document.getElementById('baudRate'),
             writeFile: document.getElementById('writeFile')
         };
@@ -350,32 +466,12 @@
                 log('Starting Happy Read...', 'info');
                 updateStatus('📥 Reading...', 'working');
 
-                let flashSize = 8;
-                let flashBytes = 8 * 1024 * 1024;
+                // USE MANUAL SELECTION - ignore getFlashSize()
+                const flashSize = parseInt(el.flashSize.value);
+                const flashBytes = flashSize * 1024 * 1024;
                 
-                try {
-                    let det = flashSize;
-                    if (typeof state.esploader.getFlashSize === 'function') {
-                        det = await state.esploader.getFlashSize();
-                    }
-                    if (det > 1024 * 1024) {
-                        flashSize = Math.floor(det / (1024 * 1024));
-                        log(`Detected: ${det} bytes = ${flashSize} MB`, 'warning');
-                    } else {
-                        flashSize = det;
-                    }
-                    if (flashSize > 32 || flashSize < 1) {
-                        log(`Invalid ${flashSize}MB, using 8MB`, 'warning');
-                        flashSize = 8;
-                    }
-                    flashBytes = flashSize * 1024 * 1024;
-                } catch (e) {
-                    log('Using 8MB default', 'warning');
-                    flashSize = 8;
-                    flashBytes = 8 * 1024 * 1024;
-                }
+                log(`Using selected flash size: ${flashSize} MB (${flashBytes} bytes)`, 'info');
                 
-                log(`Flash: ${flashSize} MB`, 'info');
                 const chunk = 4096;
                 const total = Math.ceil(flashBytes / chunk);
                 const data = new Uint8Array(flashBytes);
@@ -507,7 +603,8 @@
         el.writeBtn.addEventListener('click', happyWrite);
         el.githubBackupBtn.addEventListener('click', backupGitHub);
 
-        log('✅ Ready!', 'success');
+        log('ESP32 Flash Dumper & Writer ready', 'success');
+        log('Select device type and click CONNECT to start', 'info');
     </script>
 </body>
 </html>
