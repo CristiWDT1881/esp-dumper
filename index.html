@@ -617,9 +617,15 @@
 
                 for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
                     const file = files[fileIdx];
-                    log(`Writing ${file.name}...`, 'info');
+                    log(`Writing ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)...`, 'info');
                     
                     const data = await file.arrayBuffer();
+                    log(`File loaded: ${data.byteLength} bytes`, 'info');
+                    
+                    if (data.byteLength === 0) {
+                        throw new Error('File is empty or failed to load!');
+                    }
+                    
                     const offset = 0x0;
                     
                     await state.esploader.writeFlash({
@@ -630,10 +636,11 @@
                         reportProgress: (idx, written, total) => {
                             const pct = Math.floor((written / total) * 100);
                             updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}%`);
+                            if (pct % 10 === 0) log(`Writing... ${pct}%`, 'info');
                         }
                     });
 
-                    log(`${file.name} written successfully`, 'success');
+                    log(`${file.name} written successfully!`, 'success');
                 }
 
                 updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Done!');
