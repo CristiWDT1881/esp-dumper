@@ -478,9 +478,11 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script>
-        // Minimal Buffer polyfill for esptool-js
-        if (typeof Buffer === 'undefined') {
-            window.Buffer = class Buffer extends Uint8Array {
+        // Create Buffer polyfill before any module loads
+        (function() {
+            if (typeof window.Buffer !== 'undefined') return;
+            
+            class BufferPolyfill extends Uint8Array {
                 constructor(arg, encodingOrOffset, length) {
                     if (typeof arg === 'number') {
                         super(arg);
@@ -488,8 +490,10 @@
                         const encoder = new TextEncoder();
                         const arr = encoder.encode(arg);
                         super(arr);
-                    } else if (arg instanceof ArrayBuffer || ArrayBuffer.isView(arg)) {
+                    } else if (arg instanceof ArrayBuffer) {
                         super(arg, encodingOrOffset, length);
+                    } else if (ArrayBuffer.isView(arg)) {
+                        super(arg.buffer, arg.byteOffset, arg.byteLength);
                     } else if (Array.isArray(arg)) {
                         super(arg);
                     } else {
@@ -498,16 +502,30 @@
                 }
                 
                 static from(arg, encoding) {
-                    return new Buffer(arg, encoding);
+                    return new BufferPolyfill(arg, encoding);
                 }
                 
-                static alloc(size) {
-                    return new Buffer(size);
+                static alloc(size, fill, encoding) {
+                    const buf = new BufferPolyfill(size);
+                    if (fill !== undefined) {
+                        buf.fill(fill);
+                    }
+                    return buf;
                 }
                 
-                static concat(list) {
-                    const totalLength = list.reduce((acc, buf) => acc + buf.length, 0);
-                    const result = new Buffer(totalLength);
+                static allocUnsafe(size) {
+                    return new BufferPolyfill(size);
+                }
+                
+                static isBuffer(obj) {
+                    return obj instanceof BufferPolyfill;
+                }
+                
+                static concat(list, totalLength) {
+                    if (totalLength === undefined) {
+                        totalLength = list.reduce((acc, buf) => acc + buf.length, 0);
+                    }
+                    const result = new BufferPolyfill(totalLength);
                     let offset = 0;
                     for (const buf of list) {
                         result.set(buf, offset);
@@ -517,14 +535,41 @@
                 }
                 
                 toString(encoding) {
-                    const decoder = new TextDecoder(encoding || 'utf-8');
-                    return decoder.decode(this);
+                    try {
+                        const decoder = new TextDecoder(encoding || 'utf-8');
+                        return decoder.decode(this);
+                    } catch (e) {
+                        return String.fromCharCode.apply(null, Array.from(this));
+                    }
                 }
-            };
-        }
+                
+                write(string, offset, length, encoding) {
+                    const encoder = new TextEncoder();
+                    const encoded = encoder.encode(string);
+                    const bytesToWrite = Math.min(encoded.length, length || this.length - offset);
+                    this.set(encoded.subarray(0, bytesToWrite), offset || 0);
+                    return bytesToWrite;
+                }
+                
+                slice(start, end) {
+                    return new BufferPolyfill(super.slice(start, end));
+                }
+            }
+            
+            // Make it globally available
+            window.Buffer = BufferPolyfill;
+            
+            // Also add to global scope for modules
+            if (typeof global === 'undefined') {
+                window.global = window;
+            }
+            global.Buffer = BufferPolyfill;
+            
+            console.log('✅ Buffer polyfill loaded');
+        })();
     </script>
     <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.0/bundle.js';
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
         // State
         const state = {
