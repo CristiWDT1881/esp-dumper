@@ -410,50 +410,194 @@
         async function connect() {
             try {
                 if (!('serial' in navigator)) {
-                    alert('Web Serial not supported. Use Chrome/Edge.');
+                    alert('Web Serial API nu este suportată! Folosește Chrome sau Edge.');
                     return;
                 }
+
+                // Cleanup orice conexiune anterioară
+                if (state.transport) {
+                    try {
+                        await state.transport.disconnect();
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    } catch (e) {
+                        console.log('Cleanup error:', e);
+                    }
+                }
+
                 updateStatus('Connecting...', 'working');
                 log('Requesting port...', 'info');
+                
+                // Solicită portul
                 state.port = await navigator.serial.requestPort();
+                
+                const portInfo = state.port.getInfo();
+                log(`Port selected: VendorID 0x${portInfo.usbVendorId?.toString(16)} ProductID 0x${portInfo.usbProductId?.toString(16)}`, 'info');
+                
+                // CRUCIAL: DESCHIDE PORTUL ÎNAINTE DE TRANSPORT!
                 const baud = parseInt(el.baudRate.value);
-                state.transport = new Transport(state.port);
-                state.esploader = new ESPLoader({ transport: state.transport, baudrate: baud, terminal: term });
-                log('Connecting...', 'info');
-                state.chip = await state.esploader.main();
+                log(`Opening port at ${baud} baud...`, 'info');
+                
+                await state.port.open({ 
+                    baudRate: baud,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none',
+                    bufferSize: 65536,
+                    flowControl: 'none'
+                });
+                
+                log('Port opened successfully', 'success');
+                
+                // Așteaptă puțin după deschidere
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Acum creează Transport cu portul DESCHIS
+                state.transport = new Transport(state.port, true);
+                
+                // Creează ESPLoader
+                state.esploader = new ESPLoader({
+                    transport: state.transport,
+                    baudrate: baud,
+                    romBaudrate: 115200,
+                    terminal: term,
+                    enableTracing: false
+                });
+                
+                log('Connecting to chip...', 'info');
+                
+                // Conectează la chip cu retry
+                let retries = 3;
+                let lastError;
+                
+                while (retries > 0) {
+                    try {
+                        state.chip = await state.esploader.main();
+                        break;
+                    } catch (e) {
+                        lastError = e;
+                        retries--;
+                        if (retries > 0) {
+                            log(`Retry ${4 - retries}/3...`, 'warning');
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        }
+                    }
+                }
+                
+                if (!state.chip) {
+                    throw lastError || new Error('Failed to connect to chip');
+                }
+                
                 state.connected = true;
-                const chip = state.chip?.CHIP_NAME || el.deviceType.value;
-                log(`✅ Connected: ${chip}`, 'success');
-                updateStatus(`✅ ${chip}`, 'connected');
+                
+                const chipName = state.chip?.CHIP_NAME || el.deviceType.value;
+                log(`✅ Connected: ${chipName}`, 'success');
+                
+                // Citește și afișează MAC address
+                try {
+                    const macAddr = await state.esploader.readMac();
+                    log(`MAC Address: ${macAddr}`, 'info');
+                } catch (e) {
+                    console.log('MAC read error:', e);
+                }
+                
+                updateStatus(`✅ ${chipName}`, 'connected');
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
                 el.dumpBtn.disabled = false;
                 el.writeBtn.disabled = false;
                 el.githubBackupBtn.disabled = false;
+                
             } catch (e) {
-                log(`Error: ${e.message}`, 'error');
-                updateStatus('❌ Failed', 'error');
+                log(`❌ Error: ${e.message}`, 'error');
+                updateStatus('❌ Connection failed', 'error');
+                
+                // Cleanup în caz de eroare
+                try {
+                    if (state.transport) await state.transport.disconnect();
+                    if (state.port) await state.port.close();
+                } catch (cleanupError) {
+                    console.log('Cleanup error:', cleanupError);
+                }
+                
+                state.port = null;
+                state.transport = null;
+                state.esploader = null;
+                state.connected = false;
+                
+                // Sfaturi pentru utilizator
+                if (e.message.includes('Failed to open') || e.message.includes('port')) {
+                    log('💡 Soluții:', 'warning');
+                    log('1️⃣ Închide Arduino IDE / PlatformIO', 'info');
+                    log('2️⃣ Deconectează și reconectează USB-ul', 'info');
+                    log('3️⃣ Încearcă un alt port USB', 'info');
+                    log('4️⃣ Restart browser-ul complet', 'info');
+                }
+                
+                if (e.message.includes('requestPort')) {
+                    log('💡 Nu ai selectat un port. Încearcă din nou.', 'warning');
+                }
             }
         }
 
         async function disconnect() {
             try {
-                if (state.transport) await state.transport.disconnect();
-                if (state.port) await state.port.close();
+                log('Disconnecting...', 'info');
+                
+                // Disconnect transport
+                if (state.transport) {
+                    try {
+                        await state.transport.disconnect();
+                        log('Transport disconnected', 'info');
+                    } catch (e) {
+                        console.log('Transport disconnect error:', e);
+                    }
+                }
+                
+                // Așteaptă puțin
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // Close port
+                if (state.port) {
+                    try {
+                        await state.port.close();
+                        log('Port closed', 'info');
+                    } catch (e) {
+                        console.log('Port close error:', e);
+                    }
+                }
+                
+                // Reset state
                 state.port = null;
                 state.esploader = null;
                 state.transport = null;
                 state.chip = null;
                 state.connected = false;
+                
                 updateStatus('Disconnected', '');
-                log('Disconnected', 'info');
+                log('✅ Disconnected successfully', 'success');
+                
+                // Update UI
                 el.connectBtn.disabled = false;
                 el.disconnectBtn.disabled = true;
                 el.dumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
                 el.githubBackupBtn.disabled = true;
+                
             } catch (e) {
-                log(`Error: ${e.message}`, 'error');
+                log(`Error during disconnect: ${e.message}`, 'error');
+                
+                // Forțează reset state oricum
+                state.port = null;
+                state.esploader = null;
+                state.transport = null;
+                state.chip = null;
+                state.connected = false;
+                
+                el.connectBtn.disabled = false;
+                el.disconnectBtn.disabled = true;
+                el.dumpBtn.disabled = true;
+                el.writeBtn.disabled = true;
+                el.githubBackupBtn.disabled = true;
             }
         }
 
