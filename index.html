@@ -501,8 +501,58 @@
                     }
                 }
                 
-                static from(arg, encoding) {
-                    return new BufferPolyfill(arg, encoding);
+                static from(arg, encodingOrOffset, length) {
+                    if (typeof arg === 'number') {
+                        throw new TypeError('The "value" argument must not be of type number');
+                    }
+                    
+                    if (typeof arg === 'string') {
+                        const encoding = encodingOrOffset || 'utf-8';
+                        
+                        // Handle special encodings
+                        if (encoding === 'binary' || encoding === 'latin1') {
+                            const arr = new Uint8Array(arg.length);
+                            for (let i = 0; i < arg.length; i++) {
+                                arr[i] = arg.charCodeAt(i) & 0xff;
+                            }
+                            return new BufferPolyfill(arr);
+                        }
+                        
+                        if (encoding === 'hex') {
+                            const arr = new Uint8Array(arg.length / 2);
+                            for (let i = 0; i < arg.length; i += 2) {
+                                arr[i / 2] = parseInt(arg.substr(i, 2), 16);
+                            }
+                            return new BufferPolyfill(arr);
+                        }
+                        
+                        if (encoding === 'base64') {
+                            const binaryString = atob(arg);
+                            const arr = new Uint8Array(binaryString.length);
+                            for (let i = 0; i < binaryString.length; i++) {
+                                arr[i] = binaryString.charCodeAt(i);
+                            }
+                            return new BufferPolyfill(arr);
+                        }
+                        
+                        // Default: use TextEncoder
+                        const encoder = new TextEncoder();
+                        return new BufferPolyfill(encoder.encode(arg));
+                    }
+                    
+                    if (arg instanceof ArrayBuffer) {
+                        return new BufferPolyfill(arg, encodingOrOffset, length);
+                    }
+                    
+                    if (ArrayBuffer.isView(arg)) {
+                        return new BufferPolyfill(arg.buffer, arg.byteOffset, arg.byteLength);
+                    }
+                    
+                    if (Array.isArray(arg)) {
+                        return new BufferPolyfill(new Uint8Array(arg));
+                    }
+                    
+                    return new BufferPolyfill(arg, encodingOrOffset, length);
                 }
                 
                 static alloc(size, fill, encoding) {
