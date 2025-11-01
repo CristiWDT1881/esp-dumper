@@ -804,9 +804,41 @@
                 
                 state.connected = true;
 
-                const chipType = await state.esploader.chipName();
-                const macAddr = await state.esploader.macAddr();
-                const flashSize = await state.esploader.getFlashSize();
+                // Get chip info - handle both old and new API
+                let chipType;
+                if (typeof state.esploader.chipName === 'function') {
+                    chipType = await state.esploader.chipName();
+                } else if (state.chip && state.chip.CHIP_NAME) {
+                    chipType = state.chip.CHIP_NAME;
+                } else if (state.chip) {
+                    chipType = state.chip;
+                } else {
+                    chipType = 'Unknown';
+                }
+                
+                // Get MAC address
+                let macAddr = 'Unknown';
+                try {
+                    if (typeof state.esploader.macAddr === 'function') {
+                        macAddr = await state.esploader.macAddr();
+                    } else if (state.esploader.chip && state.esploader.chip.macAddr) {
+                        macAddr = await state.esploader.chip.macAddr();
+                    }
+                } catch (e) {
+                    console.log('Could not get MAC:', e);
+                }
+                
+                // Get flash size
+                let flashSize = 4; // Default to 4MB
+                try {
+                    if (typeof state.esploader.getFlashSize === 'function') {
+                        flashSize = await state.esploader.getFlashSize();
+                    } else if (state.esploader.chip && typeof state.esploader.chip.getFlashSize === 'function') {
+                        flashSize = await state.esploader.chip.getFlashSize();
+                    }
+                } catch (e) {
+                    console.log('Could not get flash size:', e);
+                }
 
                 updateStatus(`✅ Connected - ${chipType}`, 'connected');
                 log(`Chip: ${chipType}`, 'success');
@@ -867,8 +899,20 @@
                 log('Starting Happy Read - Full flash dump...', 'info');
                 updateStatus('📥 Reading flash memory...', 'working');
 
-                // Get flash size
-                const flashSize = await state.esploader.getFlashSize();
+                // Get flash size with fallback
+                let flashSize = 4; // Default 4MB
+                try {
+                    if (typeof state.esploader.getFlashSize === 'function') {
+                        flashSize = await state.esploader.getFlashSize();
+                    } else if (state.esploader.chip && typeof state.esploader.chip.getFlashSize === 'function') {
+                        flashSize = await state.esploader.chip.getFlashSize();
+                    } else if (state.chip && typeof state.chip.getFlashSize === 'function') {
+                        flashSize = await state.chip.getFlashSize();
+                    }
+                } catch (e) {
+                    log('Using default flash size: 4 MB', 'warning');
+                }
+                
                 const flashSizeBytes = flashSize * 1024 * 1024;
                 
                 log(`Flash size: ${flashSize} MB (${flashSizeBytes} bytes)`, 'info');
@@ -904,7 +948,21 @@
                 }
 
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const chipName = await state.esploader.chipName();
+                
+                // Get chip name with fallback
+                let chipName = 'ESP32';
+                try {
+                    if (typeof state.esploader.chipName === 'function') {
+                        chipName = await state.esploader.chipName();
+                    } else if (state.chip && state.chip.CHIP_NAME) {
+                        chipName = state.chip.CHIP_NAME;
+                    } else if (state.chip) {
+                        chipName = String(state.chip);
+                    }
+                } catch (e) {
+                    chipName = el.deviceType.value;
+                }
+                
                 const filename = `${chipName}_dump_${timestamp}.bin`;
                 
                 const blob = new Blob([dumpData], {type: 'application/octet-stream'});
