@@ -631,7 +631,61 @@
             }
             global.Buffer = BufferPolyfill;
             
+            // Patch TextDecoder to handle 'binary' encoding
+            const OriginalTextDecoder = window.TextDecoder;
+            window.TextDecoder = class TextDecoderPatched {
+                constructor(encoding, options) {
+                    this.encoding = encoding || 'utf-8';
+                    
+                    // Convert unsupported encodings
+                    if (encoding === 'binary' || encoding === 'latin1') {
+                        this.isBinary = true;
+                        this.decoder = null;
+                    } else {
+                        this.isBinary = false;
+                        this.decoder = new OriginalTextDecoder(encoding, options);
+                    }
+                }
+                
+                decode(input) {
+                    if (this.isBinary) {
+                        // Handle binary encoding manually
+                        const bytes = new Uint8Array(input);
+                        return String.fromCharCode.apply(null, Array.from(bytes));
+                    }
+                    return this.decoder.decode(input);
+                }
+            };
+            
+            // Patch TextEncoder for completeness
+            const OriginalTextEncoder = window.TextEncoder;
+            window.TextEncoder = class TextEncoderPatched {
+                constructor(encoding) {
+                    this.encoding = encoding || 'utf-8';
+                    
+                    if (encoding === 'binary' || encoding === 'latin1') {
+                        this.isBinary = true;
+                        this.encoder = null;
+                    } else {
+                        this.isBinary = false;
+                        this.encoder = new OriginalTextEncoder();
+                    }
+                }
+                
+                encode(string) {
+                    if (this.isBinary) {
+                        const arr = new Uint8Array(string.length);
+                        for (let i = 0; i < string.length; i++) {
+                            arr[i] = string.charCodeAt(i) & 0xff;
+                        }
+                        return arr;
+                    }
+                    return this.encoder.encode(string);
+                }
+            };
+            
             console.log('✅ Buffer polyfill loaded');
+            console.log('✅ TextDecoder/TextEncoder patched');
         })();
     </script>
     <script type="module">
