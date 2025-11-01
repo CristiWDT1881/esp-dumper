@@ -511,64 +511,148 @@
             el.resumeBtn.disabled = true;
 
             try {
-                log(resume ? 'Resuming dump...' : 'Starting Happy Read...', 'info');
+                log(resume ? 'Resuming dump...' : 'Starting Happy Read (bit-perfect mode)...', 'info');
                 updateStatus('Reading...', 'working');
 
                 const flashSize = parseInt(el.flashSize.value);
                 const flashBytes = flashSize * 1024 * 1024;
-                const chunk = 4096;
+                const chunk = 4096; // 4KB chunks pentru stabilitate
                 let offset = resume ? state.resumeOffset : 0;
                 const data = new Uint8Array(flashBytes);
 
+                // Dacă e resume, încarcă datele existente
                 if (resume && state.resumeFile) {
                     const reader = new FileReader();
                     await new Promise((res, rej) => {
-                        reader.onload = () => { data.set(new Uint8Array(reader.result), 0); res(); };
+                        reader.onload = () => { 
+                            data.set(new Uint8Array(reader.result), 0); 
+                            res(); 
+                        };
                         reader.onerror = rej;
                         reader.readAsArrayBuffer(state.resumeFile);
                     });
-                    log(`Resumed from ${offset} bytes`, 'info');
+                    log(`Resumed from ${(offset/1024/1024).toFixed(2)} MB`, 'info');
                 }
 
                 const total = Math.ceil((flashBytes - offset) / chunk);
                 let read = 0;
+                let emptyChunks = 0;
+                let dataChunks = 0;
+                let lastLog = 0;
+
+                log(`Total to read: ${(flashBytes/1024/1024).toFixed(2)} MB in ${total} chunks`, 'info');
 
                 for (let i = 0; i < total; i++) {
                     const addr = offset + i * chunk;
                     const size = Math.min(chunk, flashBytes - addr);
-                    let block;
-                    let retries = 3;
-                    while (retries-- > 0) {
+                    let block = null;
+                    let retries = 5; // Mai multe retry-uri
+
+                    // Retry cu delay progresiv
+                    while (retries > 0) {
                         try {
                             block = await state.esploader.readFlash(addr, size);
-                            break;
+                            
+                            // VERIFICARE: Asigură-te că am primit exact size bytes
+                            if (!block || block.byteLength !== size) {
+                                throw new Error(`Expected ${size} bytes, got ${block?.byteLength || 0}`);
+                            }
+                            
+                            break; // Success!
                         } catch (e) {
-                            if (retries === 0) throw e;
-                            log(`Retry chunk ${i+1}/${total}...`, 'warning');
-                            await new Promise(r => setTimeout(r, 500));
+                            retries--;
+                            if (retries === 0) {
+                                log(`FAILED at 0x${addr.toString(16)}: ${e.message}`, 'error');
+                                throw new Error(`Read failed at ${(addr/1024/1024).toFixed(2)}MB: ${e.message}`);
+                            }
+                            log(`Retry ${6-retries}/5 at 0x${addr.toString(16)}...`, 'warning');
+                            await new Promise(r => setTimeout(r, 200 * (6-retries))); // Delay progresiv
                         }
                     }
-                    data.set(new Uint8Array(block), addr);
+
+                    // Convertește la Uint8Array și verifică
+                    const blockArray = new Uint8Array(block);
+                    
+                    // Statistici: verifică dacă chunk-ul are date
+                    let hasData = false;
+                    for (let j = 0; j < blockArray.length; j++) {
+                        if (blockArray[j] !== 0xFF) {
+                            hasData = true;
+                            break;
+                        }
+                    }
+                    
+                    if (hasData) dataChunks++;
+                    else emptyChunks++;
+
+                    // Scrie în buffer
+                    data.set(blockArray, addr);
                     read += size;
+                    
                     const pct = Math.floor((offset + read) / flashBytes * 100);
                     updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}%`);
-                    if (i % Math.floor(total / 10) === 0) log(`${pct}%`, 'info');
-                    await new Promise(r => setTimeout(r, 100));
+                    
+                    // Log la fiecare 5% sau dacă găsim date după zone goale
+                    if (pct >= lastLog + 5 || (hasData && emptyChunks > 10)) {
+                        const mbRead = ((offset + read) / 1024 / 1024).toFixed(2);
+                        log(`${pct}% (${mbRead}MB) - Data: ${dataChunks}, Empty: ${emptyChunks}`, 'info');
+                        lastLog = pct;
+                    }
+
+                    // Delay mic pentru stabilitate ESP32-S3
+                    if (i % 50 === 0) {
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                }
+
+                // Verificare finală
+                let totalDataBytes = 0;
+                let totalEmptyBytes = 0;
+                for (let i = 0; i < data.length; i++) {
+                    if (data[i] !== 0xFF) totalDataBytes++;
+                    else totalEmptyBytes++;
+                }
+
+                const dataPct = ((totalDataBytes / flashBytes) * 100).toFixed(2);
+                log(`=== READ COMPLETE ===`, 'success');
+                log(`Total: ${(flashBytes/1024/1024).toFixed(2)} MB`, 'info');
+                log(`Data: ${(totalDataBytes/1024/1024).toFixed(2)} MB (${dataPct}%)`, 'success');
+                log(`Empty: ${(totalEmptyBytes/1024/1024).toFixed(2)} MB (${(100-dataPct).toFixed(2)}%)`, 'info');
+
+                if (totalDataBytes === 0) {
+                    log('⚠️ WARNING: Flash appears completely empty!', 'warning');
+                    const proceed = confirm('Flash appears empty (all 0xFF)!\n\nSave anyway?');
+                    if (!proceed) {
+                        state.isOperating = false;
+                        el.dumpBtn.disabled = false;
+                        el.resumeBtn.disabled = false;
+                        return;
+                    }
                 }
 
                 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                 const name = (state.chip?.CHIP_NAME || el.deviceType.value) + '_dump_' + ts + '.bin';
-                saveAs(new Blob([data]), name);
+                
+                // Salvare cu verificare
+                const blob = new Blob([data]);
+                if (blob.size !== flashBytes) {
+                    throw new Error(`Blob size mismatch! Expected ${flashBytes}, got ${blob.size}`);
+                }
+                
+                saveAs(blob, name);
                 state.lastDumpData = data;
                 state.lastDumpFilename = name;
+                
                 updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100%!');
                 log(`Saved: ${name}`, 'success');
-                updateStatus('Done!', 'connected');
+                log(`File size: ${(blob.size/1024/1024).toFixed(2)} MB`, 'info');
+                updateStatus('Dump complete!', 'connected');
                 setTimeout(() => hideProgress(el.dumpProgress), 3000);
+                
             } catch (e) {
-                log(`Error: ${e.message}`, 'error');
-                updateStatus('Failed', 'error');
-                alert(`Failed: ${e.message}\nTry lower baud or check cable.`);
+                log(`ERROR: ${e.message}`, 'error');
+                updateStatus('Read failed', 'error');
+                alert(`Read failed: ${e.message}\n\nTry:\n- Lower baud rate (460800 or 230400)\n- Better USB cable\n- Reconnect device`);
             } finally {
                 state.isOperating = false;
                 el.dumpBtn.disabled = false;
@@ -600,32 +684,65 @@
                 return;
             }
 
-            const eraseChoice = confirm('Erase entire flash before writing?\n\nOK = Full Erase (recommended)\nCancel = Write only (faster, risky)');
-            
             state.isOperating = true;
             el.writeBtn.disabled = true;
 
             try {
-                log(`Writing ${files.length} file(s)...`, 'info');
+                log(`Analyzing ${files.length} file(s)...`, 'info');
+                
+                // Verificare fișier înainte de scriere
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const data = await file.arrayBuffer();
+                    const bytes = new Uint8Array(data);
+                    
+                    log(`File: ${file.name}`, 'info');
+                    log(`Size: ${(file.size/1024/1024).toFixed(2)} MB (${file.size} bytes)`, 'info');
+                    
+                    // Verifică conținutul
+                    let emptyBytes = 0;
+                    let nonEmptyBytes = 0;
+                    for (let j = 0; j < Math.min(bytes.length, 1024); j++) {
+                        if (bytes[j] === 0xFF) emptyBytes++;
+                        else nonEmptyBytes++;
+                    }
+                    
+                    const emptyPct = Math.floor((emptyBytes / 1024) * 100);
+                    log(`First 1KB: ${emptyPct}% empty (0xFF), ${100-emptyPct}% data`, emptyPct > 90 ? 'warning' : 'success');
+                    
+                    if (emptyPct === 100) {
+                        const proceed = confirm(`WARNING: ${file.name} appears to be EMPTY (all 0xFF)!\n\nThis will erase your device!\n\nContinue anyway?`);
+                        if (!proceed) {
+                            log('Write cancelled by user', 'warning');
+                            state.isOperating = false;
+                            el.writeBtn.disabled = false;
+                            return;
+                        }
+                    }
+                    
+                    // Verifică dacă arată ca firmware valid
+                    if (bytes[0] === 0xE9) {
+                        log('✓ Valid ESP32 firmware header detected', 'success');
+                    } else {
+                        log(`⚠ Unknown header: 0x${bytes[0].toString(16).toUpperCase()} (not standard ESP32 firmware)`, 'warning');
+                    }
+                }
+
+                const eraseChoice = confirm('Erase entire flash before writing?\n\nOK = Full Erase (recommended for firmware)\nCancel = Write only (for partial updates)');
+                
                 updateStatus('Writing...', 'working');
 
                 if (eraseChoice) {
                     log('Erasing flash...', 'warning');
                     await state.esploader.eraseFlash();
-                    log('Flash erased', 'success');
+                    log('Flash erased completely', 'success');
                 }
 
                 for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
                     const file = files[fileIdx];
-                    log(`Writing ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)...`, 'info');
+                    log(`Writing ${file.name}...`, 'info');
                     
                     const data = await file.arrayBuffer();
-                    log(`File loaded: ${data.byteLength} bytes`, 'info');
-                    
-                    if (data.byteLength === 0) {
-                        throw new Error('File is empty or failed to load!');
-                    }
-                    
                     const offset = 0x0;
                     
                     await state.esploader.writeFlash({
@@ -636,7 +753,7 @@
                         reportProgress: (idx, written, total) => {
                             const pct = Math.floor((written / total) * 100);
                             updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}%`);
-                            if (pct % 10 === 0) log(`Writing... ${pct}%`, 'info');
+                            if (pct % 10 === 0 && pct > 0) log(`Writing... ${pct}%`, 'info');
                         }
                     });
 
@@ -658,7 +775,7 @@
             } catch (e) {
                 log(`Write error: ${e.message}`, 'error');
                 updateStatus('Write failed', 'error');
-                alert(`Write failed: ${e.message}\n\nTry:\n- Lower baud rate\n- Full erase option\n- Check cable connection`);
+                alert(`Write failed: ${e.message}\n\nTry:\n- Use REAL firmware (not dump)\n- Lower baud rate\n- Check cable connection`);
             } finally {
                 state.isOperating = false;
                 el.writeBtn.disabled = false;
