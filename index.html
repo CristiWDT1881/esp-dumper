@@ -615,7 +615,22 @@
             } catch (e) {
                 log(`Error: ${e.message}`, 'error');
                 updateStatus('❌ Failed', 'error');
-                hideProgress(el.dumpProgress);
+                hideProgress(el.githubProgress);
+                alert(`Failed: ${e.message}`);
+            }
+        }
+
+        el.connectBtn.addEventListener('click', connect);
+        el.disconnectBtn.addEventListener('click', disconnect);
+        el.dumpBtn.addEventListener('click', happyRead);
+        el.writeBtn.addEventListener('click', happyWrite);
+        el.githubBackupBtn.addEventListener('click', backupGitHub);
+
+        log('ESP32 Flash Dumper & Writer ready', 'success');
+        log('Select device type and click CONNECT to start', 'info');
+    </script>
+</body>
+</html>el.dumpProgress);
             } finally {
                 state.isOperating = false;
                 el.dumpBtn.disabled = false;
