@@ -477,11 +477,53 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script>
+        // Minimal Buffer polyfill for esptool-js
+        if (typeof Buffer === 'undefined') {
+            window.Buffer = class Buffer extends Uint8Array {
+                constructor(arg, encodingOrOffset, length) {
+                    if (typeof arg === 'number') {
+                        super(arg);
+                    } else if (typeof arg === 'string') {
+                        const encoder = new TextEncoder();
+                        const arr = encoder.encode(arg);
+                        super(arr);
+                    } else if (arg instanceof ArrayBuffer || ArrayBuffer.isView(arg)) {
+                        super(arg, encodingOrOffset, length);
+                    } else if (Array.isArray(arg)) {
+                        super(arg);
+                    } else {
+                        super(0);
+                    }
+                }
+                
+                static from(arg, encoding) {
+                    return new Buffer(arg, encoding);
+                }
+                
+                static alloc(size) {
+                    return new Buffer(size);
+                }
+                
+                static concat(list) {
+                    const totalLength = list.reduce((acc, buf) => acc + buf.length, 0);
+                    const result = new Buffer(totalLength);
+                    let offset = 0;
+                    for (const buf of list) {
+                        result.set(buf, offset);
+                        offset += buf.length;
+                    }
+                    return result;
+                }
+                
+                toString(encoding) {
+                    const decoder = new TextDecoder(encoding || 'utf-8');
+                    return decoder.decode(this);
+                }
+            };
+        }
+    </script>
     <script type="module">
-        // Import buffer polyfill first
-        import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
-        window.Buffer = Buffer;
-        
         import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.0/bundle.js';
 
         // State
