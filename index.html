@@ -477,6 +477,11 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+    <script>
+        // Make Buffer available globally for esptool-js
+        window.Buffer = buffer.Buffer;
+    </script>
     <script type="module">
         import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.0/bundle.js';
 
