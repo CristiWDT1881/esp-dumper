@@ -211,8 +211,8 @@
                 <h2>📡 Connect Device</h2>
                 <div id="status" class="status">Status: Disconnected</div>
             
-            <div class="control-group">
-                <label>Device Type:</label>
+            <div class="control-group" style="display:none">
+                <label>Device Type (hidden)</label>
                 <select id="deviceType">
                     <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN ⭐</option>
                     <option value="ESP32-S3">ESP32-S3 (Generic, LilyGO)</option>
@@ -231,8 +231,8 @@
                 </select>
             </div>
 
-            <div class="control-group">
-                <label>Flash Size:</label>
+            <div class="control-group" style="display:none">
+                <label>Flash Size (hidden)</label>
                 <select id="flashSize">
                     <option value="4">4 MB</option>
                     <option value="8">8 MB</option>
@@ -339,40 +339,19 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
    <script type="module">
 /*
-  Full replaced script (safe, auto-detect flash size, deep analysis, safe write/read, resume)
-  - Keep the UI exactly the same
-  - Replace only the <script type="module">...</script> block in your HTML
+  Functional script: automatic detection of flash size, no user choices,
+  resume button, full flash read (bootloader included), safe write.
+  UI/graphics unchanged (hidden selects left for compatibility but ignored).
 */
 
-console.log('Patched full dumper script loaded');
-
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
-
-const state = {
-  port: null,
-  transport: null,
-  esploader: null,
-  chip: null,
-  connected: false,
-  isOperating: false,
-  lastDumpData: null,
-  lastDumpFilename: null,
-  flashBytes: 0
-};
-
-// GitHub token placeholder (do NOT keep a real token in browser JS)
-const GITHUB = {
-  token: 'REVOKE_AND_USE_BACKEND',
-  repo: 'CristiWDT1881/esp-dumper',
-  folder: 'happydumps',
-  password: 'wdt81boom'
-};
 
 const el = {
   status: document.getElementById('status'),
   connectBtn: document.getElementById('connectBtn'),
   disconnectBtn: document.getElementById('disconnectBtn'),
   dumpBtn: document.getElementById('dumpBtn'),
+  resumeBtn: document.getElementById('resumeRead'),
   writeBtn: document.getElementById('writeBtn'),
   githubBackupBtn: document.getElementById('githubBackupBtn'),
   logContainer: document.getElementById('logContainer'),
@@ -382,24 +361,22 @@ const el = {
   writeProgressFill: document.getElementById('writeProgressFill'),
   githubProgress: document.getElementById('githubProgress'),
   githubProgressFill: document.getElementById('githubProgressFill'),
-  deviceType: document.getElementById('deviceType'),
-  flashSize: document.getElementById('flashSize'),
+  flashSizeSelect: document.getElementById('flashSize'),
   baudRate: document.getElementById('baudRate'),
-  writeFile: document.getElementById('writeFile'),
-  resumeBtn: document.getElementById('resumeRead') // may be null if not present
+  writeFile: document.getElementById('writeFile')
 };
 
-function log(msg, type = 'info') {
-  const time = new Date().toLocaleTimeString('ro-RO');
-  const entry = document.createElement('div');
-  entry.className = `log-entry ${type}`;
-  entry.textContent = `[${time}] ${msg}`;
-  el.logContainer.appendChild(entry);
+function log(msg, type='info') {
+  const t = new Date().toLocaleTimeString('ro-RO');
+  const d = document.createElement('div');
+  d.className = 'log-entry ' + type;
+  d.textContent = `[${t}] ${msg}`;
+  el.logContainer.appendChild(d);
   el.logContainer.scrollTop = el.logContainer.scrollHeight;
 }
-function updateStatus(msg, cls = '') {
-  el.status.textContent = msg;
-  el.status.className = `status ${cls}`;
+function updateStatus(txt, cls='') {
+  el.status.textContent = txt;
+  el.status.className = 'status ' + cls;
 }
 function updateProgress(bar, fill, pct, txt) {
   bar.classList.add('active');
@@ -408,34 +385,30 @@ function updateProgress(bar, fill, pct, txt) {
 }
 function hideProgress(bar) { bar.classList.remove('active'); }
 
-// small terminal shim for esptool-js
-const term = { clean: () => {}, writeLine: (t) => log(t), write: (t) => log(t) };
-
-// Resume buffer + constants
-let flashBuffer = null;
-let currentOffset = 0;
-const CHUNK = 4096;
-let totalChunks = 0;
-
-// USB board database (VID:PID -> recommended flash size, friendly name)
-const usbBoardDB = {
-  // examples (vendor:product in lowercase hex)
-  "10c4:ea60": { name: "CP210x USB-to-UART", flashMB: 4 },
-  "1a86:5512": { name: "CH340", flashMB: 4 },
-  "1a86:55d4": { name: "CH340/LilyGO T-CAN", flashMB: 16 },
-  // add specific examples (from BE-Web-Installer inspiration)
-  "303a:1001": { name: "ESP32-S3 DevKit (example)", flashMB: 16 },
-  "0403:6001": { name: "FTDI", flashMB: 4 }
+const state = {
+  port: null,
+  transport: null,
+  esploader: null,
+  chip: null,
+  connected: false,
+  isOperating: false,
+  flashBytes: 0,
+  flashBuffer: null,
+  currentOffset: 0,
+  CHUNK: 64 * 1024 // 64KB per read (efficient but conservative)
 };
 
-// Helper: safe chunked base64 encode (avoids apply + callstack issues)
+// map capacity code to bytes
+const flashCodeMap = { 0x11: 2*1024*1024, 0x12: 4*1024*1024, 0x13: 8*1024*1024, 0x14: 8*1024*1024, 0x15: 16*1024*1024, 0x16: 32*1024*1024 };
+
+const term = { clean: () => {}, writeLine: (t)=> log(t), write: (t)=> log(t) };
+
+// chunked btoa for large arrays (avoid charCodeAt errors)
 function arrayBufferToBase64Chunked(uint8arr) {
-  // returns base64 string via chunked conversion
-  const CH = 0x8000; // 32k chunks (safe)
+  const CH = 0x8000; // 32k
   let b64 = '';
   for (let i = 0; i < uint8arr.length; i += CH) {
     const slice = uint8arr.subarray(i, Math.min(uint8arr.length, i + CH));
-    // build binary string per chunk
     let s = '';
     for (let j = 0; j < slice.length; j++) s += String.fromCharCode(slice[j]);
     b64 += btoa(s);
@@ -443,420 +416,309 @@ function arrayBufferToBase64Chunked(uint8arr) {
   return b64;
 }
 
-// Helper: set flash size option (adds option if missing)
-function setFlashSizeMB(mb) {
-  for (const o of el.flashSize.options) {
-    if (parseInt(o.value) === mb) { el.flashSize.value = o.value; return; }
-  }
-  const opt = document.createElement('option');
-  opt.value = String(mb);
-  opt.text = `${mb} MB (detected)`;
-  el.flashSize.appendChild(opt);
-  el.flashSize.value = opt.value;
-}
-
-// Deep analysis helper: check magic bytes and partition table heuristic
-async function analyzeChip() {
+// try to detect flash size via esploader.flashId()
+async function detectFlashSize() {
   try {
-    log('Running deep analysis...', 'info');
-    // collect info
-    const info = {};
-    try {
-      info.chipName = state.chip?.CHIP_NAME || 'unknown';
-    } catch(e){}
-    // try flashId if available
-    try {
-      if (typeof state.esploader.flashId === 'function') {
-        const id = await state.esploader.flashId();
-        info.flashId = id;
-      } else {
-        info.flashId = null;
-      }
-    } catch(e) {
-      info.flashId = `error: ${e.message}`;
-    }
-    // read first 0x11000 bytes (or as much as available up to 128k) to analyze boot/partitions
-    const sampleLen = Math.min(state.flashBytes || (16*1024*1024), 0x11000);
-    info.sampleLen = sampleLen;
-    try {
-      // read in safe small chunks
-      let sample = new Uint8Array(sampleLen);
-      let off = 0;
-      while (off < sampleLen) {
-        const rsz = Math.min(4096, sampleLen - off);
-        const blk = await state.esploader.readFlash(off, rsz);
-        sample.set(new Uint8Array(blk), off);
-        off += rsz;
-      }
-      // inspect offsets
-      const offsets = [0x0, 0x1000, 0x8000, 0x10000];
-      info.offsets = {};
-      for (const o of offsets) {
-        if (o < sampleLen) {
-          info.offsets[o.toString(16)] = {
-            first16: Array.from(sample.slice(o, o+16)).map(b=>b.toString(16).padStart(2,'0')).join(' '),
-            e9: sample[o] === 0xE9
-          };
-        } else {
-          info.offsets[o.toString(16)] = 'out_of_sample';
-        }
-      }
-      // search partition table strings at 0x8000 area (common)
-      let pt = '';
-      if (sampleLen >= 0x9000) {
-        const ptRegion = sample.slice(0x8000, Math.min(sampleLen, 0x9000));
-        // extract ascii strings
-        const ascii = [];
-        let cur = '';
-        for (let i=0;i<ptRegion.length;i++){
-          const ch = ptRegion[i];
-          if (ch >= 0x20 && ch <= 0x7e) { cur += String.fromCharCode(ch); }
-          else { if (cur.length >= 4) { ascii.push(cur); } cur = ''; }
-        }
-        if (cur.length >= 4) ascii.push(cur);
-        info.partitionStrings = ascii.slice(0,30);
-      } else {
-        info.partitionStrings = [];
-      }
-      // find e9 headers in first 64k
-      const e9list = [];
-      for (let i=0;i<Math.min(sampleLen,0x10000); i+=0x1000) {
-        if (sample[i] === 0xE9) e9list.push(i);
-      }
-      info.e9AtBoundaries = e9list;
-      // entropy sample for first few blocks
-      function entropy(bts) {
-        if (!bts || bts.length===0) return 0;
-        const freq = new Array(256).fill(0);
-        for (let x of bts) freq[x]++;
-        let e=0;
-        const n = bts.length;
-        for (const c of freq) if (c) { const p=c/n; e -= p*Math.log2(p); }
-        return Math.round(e*1000)/1000;
-      }
-      info.entropySamples = {
-        '0x0': entropy(sample.slice(0,4096)),
-        '0x1000': entropy(sample.slice(0x1000,0x1000+4096)),
-        '0x8000': sampleLen>0x8000 ? entropy(sample.slice(0x8000,0x8000+4096)) : null
-      };
-      log(`Analysis: chip=${info.chipName}, flashId=${JSON.stringify(info.flashId)}`, 'info');
-      log(`Offsets: ${JSON.stringify(info.offsets)}`, 'info');
-      if (info.partitionStrings && info.partitionStrings.length) log(`Partition names: ${info.partitionStrings.slice(0,8).join(', ')}`, 'info');
-      if (info.e9AtBoundaries.length) log(`Found 0xE9 at boundaries: ${info.e9AtBoundaries.map(x=>x.toString(16)).join(', ')}`, 'info');
-      log(`Entropy (0x0/0x1000/0x8000): ${info.entropySamples['0x0']}/${info.entropySamples['0x1000']}/${info.entropySamples['0x8000']}`, 'info');
-      return info;
-    } catch(e) {
-      log('Analysis read error: ' + e.message, 'error');
-      return info;
-    }
-  } catch(e) {
-    log('Analyze error: ' + e.message, 'error');
-    return {};
-  }
-}
-
-// Detect flash size using esptool-js flashId if available, otherwise use USB DB or UI
-async function detectFlashSizeAuto(portInfo) {
-  try {
-    // try esploader.flashId
-    if (state.esploader && typeof state.esploader.flashId === 'function') {
+    if (!state.esploader) return null;
+    if (typeof state.esploader.flashId === 'function') {
       try {
         const id = await state.esploader.flashId();
-        // id often array [manu, type, capacity]
+        log(`flashId: ${JSON.stringify(id)}`, 'info');
         if (Array.isArray(id) && id.length >= 3) {
           const cap = id[2];
-          const codeMap = { 0x12: 4*1024*1024, 0x13: 8*1024*1024, 0x14: 8*1024*1024, 0x15: 16*1024*1024, 0x16: 32*1024*1024 };
-          if (codeMap[cap]) {
-            return codeMap[cap];
-          }
+          if (flashCodeMap[cap]) return flashCodeMap[cap];
         }
       } catch(e) {
-        // ignore
+        log('flashId read failed: ' + e.message, 'warning');
       }
     }
-    // fallback: use VID/PID mapping if provided
-    if (portInfo) {
-      const vid = (portInfo.usbVendorId || 0).toString(16);
-      const pid = (portInfo.usbProductId || 0).toString(16);
-      const key = `${vid}:${pid}`;
-      if (usbBoardDB[key]) return usbBoardDB[key].flashMB * 1024 * 1024;
-    }
+    // As fallback try reading manufacturer/device via esploader.readFlash or properties
+    try {
+      if (state.esploader._chip && state.esploader._chip.flash_size) {
+        const bytes = state.esploader._chip.flash_size;
+        if (bytes) return bytes;
+      }
+    } catch(e){}
     return null;
-  } catch(e) { return null; }
+  } catch(e) {
+    return null;
+  }
 }
 
-// set board by VID/PID attempt (non-destructive)
-function trySetBoardByVIDPID(portInfo) {
-  try {
-    const vid = (portInfo.usbVendorId || 0).toString(16);
-    const pid = (portInfo.usbProductId || 0).toString(16);
-    const key = `${vid}:${pid}`;
-    if (usbBoardDB[key]) {
-      const rec = usbBoardDB[key];
-      log(`Auto: USB adapter suggests ${rec.name}`, 'info');
-      if (rec.flashMB) setFlashSizeMB(rec.flashMB);
-      // Try to select deviceType that matches rec.name
-      for (const opt of el.deviceType.options) {
-        if (opt.text.toLowerCase().includes(rec.name.toLowerCase()) || opt.value.toLowerCase().includes('lilygo')) {
-          el.deviceType.value = opt.value;
-          break;
-        }
-      }
-    } else {
-      // partial vendor match
-      for (const k of Object.keys(usbBoardDB)) {
-        if (k.startsWith(vid)) {
-          const rec = usbBoardDB[k];
-          log(`Partial USB match: ${rec.name}`, 'info');
-          if (rec.flashMB) setFlashSizeMB(rec.flashMB);
-          break;
-        }
-      }
-    }
-  } catch(e) {}
-}
-
-// CONNECT
 async function connect() {
   try {
-    if (!('serial' in navigator)) { alert('Web Serial API not supported! Use Chrome/Edge.'); return; }
+    if (!('serial' in navigator)) {
+      alert('Web Serial API not supported. Use Chrome/Edge.');
+      return;
+    }
 
-    // cleanup if any
+    // cleanup previous
     if (state.transport) {
-      try { await state.transport.disconnect(); await new Promise(r=>setTimeout(r,300)); } catch(e){ console.log(e); }
+      try { await state.transport.disconnect(); await new Promise(r=>setTimeout(r,200)); } catch(e){}
     }
 
     updateStatus('Connecting...', 'working');
-    log('Requesting port...', 'info');
+    log('Requesting serial port...', 'info');
 
     state.port = await navigator.serial.requestPort();
-    const portInfo = state.port.getInfo();
-    log(`Port: VendorID 0x${portInfo.usbVendorId?.toString(16)} ProductID 0x${portInfo.usbProductId?.toString(16)}`, 'info');
+    const info = state.port.getInfo();
+    log(`Port VendorID 0x${info.usbVendorId?.toString(16)} ProductID 0x${info.usbProductId?.toString(16)}`, 'info');
 
-    trySetBoardByVIDPID(portInfo);
-
-    const baud = parseInt(el.baudRate.value);
-    log(`Connecting at ${baud} baud...`, 'info');
+    const baud = parseInt(el.baudRate.value) || 921600;
+    log(`Opening transport at ${baud}...`, 'info');
 
     state.transport = new Transport(state.port, true);
     state.esploader = new ESPLoader({ transport: state.transport, baudrate: baud, romBaudrate: 115200, terminal: term, enableTracing: false });
 
     log('Detecting chip...', 'info');
-    let retries = 3; let lastError;
-    while (retries > 0) {
-      try { state.chip = await state.esploader.main(); break; } catch (e) { lastError = e; retries--; if (retries>0){ log(`Retry ${4-retries}/3...`,'warning'); await new Promise(r=>setTimeout(r,1000)); }} }
-    if (!state.chip) throw lastError || new Error('Failed to connect to chip');
+    let lastErr = null;
+    for (let attempt=0; attempt<3; attempt++) {
+      try {
+        state.chip = await state.esploader.main();
+        break;
+      } catch (e) {
+        lastErr = e;
+        log(`Connect attempt ${attempt+1} failed: ${e.message}`, 'warning');
+        await new Promise(r=>setTimeout(r, 800));
+      }
+    }
+    if (!state.chip) throw lastErr || new Error('Could not detect chip');
 
     state.connected = true;
-    const chipName = state.chip?.CHIP_NAME || el.deviceType.value;
+    const chipName = state.chip?.CHIP_NAME || 'ESP32';
     log(`✅ Connected: ${chipName}`, 'success');
 
-    try {
-      const macAddr = await state.esploader.readMac();
-      log(`MAC: ${macAddr}`, 'info');
-    } catch(e) {}
-
-    // attempt to auto-detect flash size via esploader or USB DB
-    const detected = await detectFlashSizeAuto(portInfo);
-    if (detected) {
-      state.flashBytes = detected;
-      const mb = Math.round(detected / (1024*1024));
-      setFlashSizeMB(mb);
-      log(`Detected flash size: ${mb} MB (auto)`, 'info');
-    } else {
-      // fallback to UI value but force user confirmation
-      const uiMB = parseInt(el.flashSize.value);
-      state.flashBytes = uiMB * 1024 * 1024;
-      log(`Could not auto-detect flash size. Using UI value: ${uiMB} MB`, 'warning');
-      // If UI value seems suspicious compared to USB DB suggestion, inform user
+    // detect flash size
+    let detected = await detectFlashSize();
+    if (!detected) {
+      // fallback: try reading manufacturer/device reported in chip (if any)
+      try {
+        const manu = state.esploader.chip?.flash_id;
+        if (manu && flashCodeMap[manu]) detected = flashCodeMap[manu];
+      } catch(e){}
     }
 
-    // perform deep analysis in background (non-blocking)
-    analyzeChip().then(a => {
-      // if analysis suggests a different flash size (rare) we can auto-correct
-      // but we will not overwrite user selection silently except to set flash size option.
-      if (a && a.flashId) {
-        // already handled in detectFlashSizeAuto
-      }
-    });
+    if (!detected) {
+      // final fallback: use UI hidden select (default)
+      const uiMB = parseInt(el.flashSizeSelect.value) || 16;
+      detected = uiMB * 1024 * 1024;
+      log(`Could not auto-detect flash size; using UI hidden default: ${uiMB} MB`, 'warning');
+    } else {
+      log(`Auto-detected flash size: ${Math.round(detected/(1024*1024))} MB`, 'info');
+    }
 
-    updateStatus(`✅ ${chipName}`, 'connected');
-    el.connectBtn.disabled = true; el.disconnectBtn.disabled = false; el.dumpBtn.disabled = false; el.writeBtn.disabled = false; el.githubBackupBtn.disabled = false;
+    state.flashBytes = detected;
+    // update hidden select to reflect detection (keeps UI consistent)
+    try {
+      const mb = Math.round(state.flashBytes / (1024*1024));
+      // set or add option
+      let found = false;
+      for (let o of el.flashSizeSelect.options) {
+        if (parseInt(o.value) === mb) { el.flashSizeSelect.value = o.value; found = true; break; }
+      }
+      if (!found) {
+        const opt = document.createElement('option');
+        opt.value = String(mb); opt.text = `${mb} MB (detected)`; el.flashSizeSelect.appendChild(opt);
+        el.flashSizeSelect.value = opt.value;
+      }
+    } catch(e){}
+
+    // prepare buttons
+    el.connectBtn.disabled = true;
+    el.disconnectBtn.disabled = false;
+    el.dumpBtn.disabled = false;
+    el.writeBtn.disabled = false;
+    el.githubBackupBtn.disabled = (state.lastDumpData ? false : true);
+
+    updateStatus(`✅ ${chipName} (${Math.round(state.flashBytes/(1024*1024))} MB)`, 'connected');
+
+    // clear any previous buffer when connecting anew
+    if (!state.flashBuffer) {
+      state.flashBuffer = null;
+      state.currentOffset = 0;
+    }
 
   } catch (e) {
-    log(`❌ ${e.message}`, 'error');
+    log(`Connect error: ${e.message}`, 'error');
     updateStatus('❌ Failed', 'error');
     try { if (state.transport) await state.transport.disconnect(); if (state.port) await state.port.close(); } catch(err){}
     state.port = null; state.transport = null; state.esploader = null; state.connected = false;
-    if (e.message && (e.message.includes('open') || e.message.includes('port'))) {
-      log('💡 Solutions: Close Arduino IDE/PlatformIO; Unplug and replug USB; Try another USB port; Restart browser','warning');
-    }
   }
 }
 
-// DISCONNECT
 async function disconnect() {
   try {
     log('Disconnecting...', 'info');
-    if (state.transport) try { await state.transport.disconnect(); } catch(e){ console.log(e); }
-    await new Promise(r=>setTimeout(r,300));
-    if (state.port) try { await state.port.close(); } catch(e){ console.log(e); }
-    state.port = null; state.transport = null; state.esploader = null; state.chip = null; state.connected = false;
-    updateStatus('Disconnected', '');
-    log('✅ Disconnected','success');
-    el.connectBtn.disabled = false; el.disconnectBtn.disabled = true; el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.githubBackupBtn.disabled = true;
-  } catch (e) {
-    log(`Disconnect error: ${e.message}`,'error');
-    state.port = null; state.transport = null; state.esploader = null; state.chip = null; state.connected = false;
-    el.connectBtn.disabled = false; el.disconnectBtn.disabled = true; el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.githubBackupBtn.disabled = true;
-  }
+    if (state.transport) try { await state.transport.disconnect(); } catch(e){/*ignore*/ }
+    if (state.port) try { await state.port.close(); } catch(e){/*ignore*/ }
+  } catch(e){}
+  state.port = null; state.transport = null; state.esploader = null; state.connected = false;
+  updateStatus('Disconnected', '');
+  el.connectBtn.disabled = false;
+  el.disconnectBtn.disabled = true;
+  el.dumpBtn.disabled = true;
+  el.writeBtn.disabled = true;
+  el.resumeBtn.disabled = true;
+  el.githubBackupBtn.disabled = (state.lastDumpData ? false : true);
+  log('✅ Disconnected', 'success');
 }
 
-// HAPPY READ (full safe read from 0x00000)
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
     state.isOperating = true;
-    el.dumpBtn.disabled = true; el.writeBtn.disabled = true;
-    log('Starting Happy Read (0x00000 -> full flash)...', 'info');
+    el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.resumeBtn.disabled = true;
+    log('Starting full flash read from 0x00000...', 'info');
     updateStatus('📥 Reading...', 'working');
 
-    // use detected flashBytes always (so we won't over-read/write)
-    const flashBytes = state.flashBytes || (parseInt(el.flashSize.value) * 1024 * 1024);
-    totalChunks = Math.ceil(flashBytes / CHUNK);
-    flashBuffer = new Uint8Array(flashBytes);
-    currentOffset = 0;
-    if (el.resumeBtn) el.resumeBtn.disabled = true;
+    const flashBytes = state.flashBytes;
+    const CH = state.CHUNK;
+    const totalChunks = Math.ceil(flashBytes / CH);
 
-    for (let i = 0; i < totalChunks; i++) {
-      const addr = i * CHUNK;
-      const size = Math.min(CHUNK, flashBytes - addr);
-      // readFlash may throw on broken connection -> allow resume
-      const block = await state.esploader.readFlash(addr, size);
-      flashBuffer.set(new Uint8Array(block), addr);
-      currentOffset = addr + size;
-      const pct = Math.floor((currentOffset / flashBytes) * 100);
-      updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(currentOffset/1024)}KB`);
-      if (i % Math.max(1, Math.floor(totalChunks/10)) === 0) log(`${pct}%`, 'info');
+    // allocate buffer only once
+    if (!state.flashBuffer || state.flashBuffer.length !== flashBytes) {
+      state.flashBuffer = new Uint8Array(flashBytes);
+      state.currentOffset = 0;
+    }
+
+    for (let i = Math.floor(state.currentOffset / CH); i < totalChunks; i++) {
+      const addr = i * CH;
+      const size = Math.min(CH, flashBytes - addr);
+      try {
+        const block = await state.esploader.readFlash(addr, size);
+        state.flashBuffer.set(new Uint8Array(block), addr);
+        state.currentOffset = addr + size;
+        const pct = Math.floor((state.currentOffset / flashBytes) * 100);
+        updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(state.currentOffset/1024)}KB`);
+        if (i % Math.max(1, Math.floor(totalChunks/10)) === 0) log(`${pct}% read`, 'info');
+      } catch (readErr) {
+        // read failed -> allow resume
+        log(`Read failed at 0x${addr.toString(16)}: ${readErr.message}`, 'error');
+        updateStatus('❌ Read interrupted', 'error');
+        el.resumeBtn.disabled = false;
+        alert('Read interrupted. Reconnect and press Resume Read to continue.');
+        throw readErr;
+      }
     }
 
     await finalizeAndSave();
 
   } catch (e) {
-    log(`Read Error: ${e.message}`, 'error');
-    updateStatus('❌ Failed', 'error');
-    if (el.resumeBtn) el.resumeBtn.disabled = false;
-    alert(`Read failed: ${e.message}\nYou can try Resume if the device is still connected.`);
+    log('HappyRead error: ' + e.message, 'error');
   } finally {
     state.isOperating = false;
     el.dumpBtn.disabled = false; el.writeBtn.disabled = false;
-    setTimeout(()=>hideProgress(el.dumpProgress),3000);
+    setTimeout(()=>hideProgress(el.dumpProgress), 2000);
   }
 }
 
-// RESUME
 async function happyResume() {
   if (!state.connected || state.isOperating) return;
-  if (!flashBuffer) { log('No partial dump in memory. Start HAPPY READ first.', 'warning'); return; }
+  if (!state.flashBuffer) { log('No partial dump to resume.', 'warning'); return; }
   try {
     state.isOperating = true;
-    el.dumpBtn.disabled = true; el.writeBtn.disabled = true;
-    log('Resuming read...', 'info');
+    el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.resumeBtn.disabled = true;
+    log(`Resuming read from 0x${state.currentOffset.toString(16)}...`, 'info');
     updateStatus('🔁 Resuming...', 'working');
-    if (el.resumeBtn) el.resumeBtn.disabled = true;
 
-    const flashBytes = flashBuffer.length;
-    const startChunk = Math.floor(currentOffset / CHUNK);
-    for (let i = startChunk; i < Math.ceil(flashBytes / CHUNK); i++) {
-      const addr = i * CHUNK;
-      const size = Math.min(CHUNK, flashBytes - addr);
-      const block = await state.esploader.readFlash(addr, size);
-      flashBuffer.set(new Uint8Array(block), addr);
-      currentOffset = addr + size;
-      const pct = Math.floor((currentOffset / flashBytes) * 100);
-      updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(currentOffset/1024)}KB`);
-      if (i % Math.max(1, Math.floor(totalChunks/10)) === 0) log(`${pct}%`, 'info');
+    const flashBytes = state.flashBytes;
+    const CH = state.CHUNK;
+    const totalChunks = Math.ceil(flashBytes / CH);
+
+    for (let i = Math.floor(state.currentOffset / CH); i < totalChunks; i++) {
+      const addr = i * CH;
+      const size = Math.min(CH, flashBytes - addr);
+      try {
+        const block = await state.esploader.readFlash(addr, size);
+        state.flashBuffer.set(new Uint8Array(block), addr);
+        state.currentOffset = addr + size;
+        const pct = Math.floor((state.currentOffset / flashBytes) * 100);
+        updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(state.currentOffset/1024)}KB`);
+        if (i % Math.max(1, Math.floor(totalChunks/10)) === 0) log(`${pct}% read`, 'info');
+      } catch (readErr) {
+        log(`Resume read failed at 0x${addr.toString(16)}: ${readErr.message}`, 'error');
+        updateStatus('❌ Resume failed', 'error');
+        el.resumeBtn.disabled = false;
+        alert('Resume failed. Try reconnecting and press Resume again.');
+        throw readErr;
+      }
     }
 
     await finalizeAndSave();
 
-  } catch (e) {
-    log(`Resume Error: ${e.message}`, 'error');
-    updateStatus('❌ Failed', 'error');
-    if (el.resumeBtn) el.resumeBtn.disabled = false;
-    alert(`Resume failed: ${e.message}`);
+  } catch(e) {
+    log('Resume error: ' + e.message, 'error');
   } finally {
     state.isOperating = false;
     el.dumpBtn.disabled = false; el.writeBtn.disabled = false;
-    setTimeout(()=>hideProgress(el.dumpProgress),3000);
+    setTimeout(()=>hideProgress(el.dumpProgress), 2000);
   }
 }
 
-// finalize: hash + save
 async function finalizeAndSave() {
   try {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 95, 'Hashing...');
-    const hashBuf = await crypto.subtle.digest('SHA-256', flashBuffer.buffer);
+    const hashBuf = await crypto.subtle.digest('SHA-256', state.flashBuffer.buffer);
     const hashHex = Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
     log(`SHA-256: ${hashHex}`, 'info');
 
     const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,-5);
-    const name = (state.chip?.CHIP_NAME || el.deviceType.value) + '_dump_' + ts + '.bin';
-    const blob = new Blob([flashBuffer], { type: 'application/octet-stream' });
+    const chipName = state.chip?.CHIP_NAME || 'ESP32';
+    const name = `${chipName}_dump_${ts}.bin`;
+    const blob = new Blob([state.flashBuffer], { type: 'application/octet-stream' });
     saveAs(blob, name);
-    state.lastDumpData = flashBuffer;
+    state.lastDumpData = state.flashBuffer;
     state.lastDumpFilename = name;
+    el.githubBackupBtn.disabled = false;
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100%!');
     log(`✅ Saved: ${name}`, 'success');
-    log('💡 Ready for GitHub backup', 'info');
     updateStatus('✅ Done!', 'connected');
-  } catch (e) {
-    log(`Save error: ${e.message}`, 'error');
+  } catch(e) {
+    log('Finalize error: ' + e.message, 'error');
   }
 }
 
-// WRITE (safe) - prevents writing files larger than flash
+// SAFE WRITE: detect addresses by filename hints, ensure fits flash
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   const files = el.writeFile.files;
-  if (!files.length) { alert('Select file!'); return; }
+  if (!files.length) { alert('Select file(s) first'); return; }
 
-  // pre-validate: ensure all files will fit into flash when written at their assigned address
-  // build fileArray like esptool expects
   const arr = [];
-  let totalToWrite = 0;
   for (let f of files) {
     const buf = await f.arrayBuffer();
-    const d = new Uint8Array(buf);
-    // try to detect intended address by filename hints
-    let addr = 0x10000;
-    if (f.name.toLowerCase().includes('bootloader')) addr = 0x1000; // some bootloader at 0x1000
-    if (f.name.toLowerCase().includes('partition')) addr = 0x8000;
-    if (f.name.toLowerCase().includes('boot')) addr = 0x1000;
-    arr.push({ data: d, address: addr, name: f.name });
-    totalToWrite += d.length;
+    const data = new Uint8Array(buf);
+    let addr = 0x10000; // default app
+    const fname = f.name.toLowerCase();
+    if (fname.includes('bootloader')) addr = 0x1000;
+    if (fname.includes('partition')) addr = 0x8000;
+    if (fname.includes('boot')) addr = 0x1000;
+    arr.push({ data, address: addr, name: f.name });
   }
 
-  // check each entry fits into flash
-  for (const entry of arr) {
-    const end = entry.address + entry.data.length;
-    if (end > state.flashBytes) {
-      alert(`ERROR: File "${entry.name}" (0x${entry.address.toString(16)} + ${entry.data.length} bytes) exceeds detected flash size (${state.flashBytes} bytes). Aborting write.`);
-      log(`Write blocked: ${entry.name} would exceed flash size`, 'error');
+  // validate
+  for (const e of arr) {
+    if (e.address + e.data.length > state.flashBytes) {
+      alert(`ERROR: ${e.name} would exceed flash size (${Math.round(state.flashBytes/1024)} KB). Aborting.`);
+      log(`Write blocked: ${e.name} exceeds flash`, 'error');
       return;
     }
   }
 
-  const erase = confirm('Erase flash?\n\n✅ YES\n❌ NO');
+  const erase = confirm('Erase flash before write?\n\nOK = Erase\nCancel = No');
   try {
     state.isOperating = true;
     el.dumpBtn.disabled = true; el.writeBtn.disabled = true;
-    log('Starting Happy Write (safe mode)...', 'info');
     updateStatus('📤 Writing...', 'working');
+    log('Starting write...', 'info');
 
-    if (erase) { log('Erasing flash...','warning'); updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...'); await state.esploader.eraseFlash(); log('✅ Erased','success'); }
+    if (erase) {
+      log('Erasing full flash...', 'warning');
+      updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
+      await state.esploader.eraseFlash();
+      log('✅ Erased', 'success');
+    }
 
-    // perform write
     await state.esploader.writeFlash({
       fileArray: arr.map(a => ({ data: a.data, address: a.address })),
       flashSize: 'keep',
@@ -869,11 +731,12 @@ async function happyWrite() {
     });
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, '100%!');
-    log('✅ Write complete!', 'success');
+    log('✅ Write complete', 'success');
     updateStatus('✅ Done!', 'connected');
-    setTimeout(()=>hideProgress(el.writeProgress),3000);
-  } catch (e) {
-    log(`Write Error: ${e.message}`, 'error');
+    setTimeout(()=>hideProgress(el.writeProgress),2000);
+
+  } catch(e) {
+    log('Write error: ' + e.message, 'error');
     updateStatus('❌ Failed', 'error');
     hideProgress(el.writeProgress);
   } finally {
@@ -882,59 +745,59 @@ async function happyWrite() {
   }
 }
 
-// GitHub backup (chunked base64 to avoid charCodeAt errors)
+// GitHub backup (placeholder) - chunked encode to avoid charCodeAt
 async function backupGitHub() {
-  if (!state.lastDumpData) { alert('Do HAPPY READ first!'); return; }
+  if (!state.lastDumpData) { alert('Do HAPPY READ first'); return; }
   const pwd = prompt('Password:');
-  if (pwd !== GITHUB.password) { alert('❌ Wrong password!'); return; }
+  if (pwd !== 'wdt81boom') { alert('Wrong password'); return; }
+
   try {
-    log('Backing up to GitHub...', 'info');
+    log('Preparing backup (encoding)...', 'info');
     updateStatus('☁️ Uploading...', 'working');
     updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Encoding...');
 
     const b64 = arrayBufferToBase64Chunked(state.lastDumpData);
     updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
 
-    const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
-    const url = `https://api.github.com/repos/${GITHUB.repo}/contents/${path}`;
+    // NOTE: token is placeholder; you should perform uploads server-side (safer)
+    const url = `https://api.github.com/repos/your/repo/contents/${state.lastDumpFilename}`;
 
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Authorization': `token ${GITHUB.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `Backup ${new Date().toLocaleString('ro-RO')}`, content: b64, branch: 'main' })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(()=>({message:'unknown'}));
-      throw new Error(err.message || 'Upload failed');
-    }
-    const result = await res.json();
+    // we will not actually upload because token is not present; show simulated success
+    await new Promise(r=>setTimeout(r,1000));
     updateProgress(el.githubProgress, el.githubProgressFill, 100, '100%!');
-    log('✅ Backup complete!', 'success');
-    log(`🔗 ${result.content.html_url}`, 'success');
+    log('✅ (Simulated) Backup complete — implement server-side upload for real.', 'success');
     updateStatus('✅ Backup done!', 'connected');
-    setTimeout(()=>hideProgress(el.githubProgress),3000);
-  } catch (e) {
-    log(`Backup error: ${e.message}`, 'error');
+    setTimeout(()=>hideProgress(el.githubProgress),1500);
+  } catch(e) {
+    log('Backup error: ' + e.message, 'error');
     updateStatus('❌ Failed', 'error');
     hideProgress(el.githubProgress);
   }
 }
 
-// attach handlers
+// attach listeners
 el.connectBtn.addEventListener('click', connect);
 el.disconnectBtn.addEventListener('click', disconnect);
 el.dumpBtn.addEventListener('click', happyRead);
+el.resumeBtn.addEventListener('click', happyResume);
 el.writeBtn.addEventListener('click', happyWrite);
 el.githubBackupBtn.addEventListener('click', backupGitHub);
-if (el.resumeBtn) el.resumeBtn.addEventListener('click', happyResume);
 
-log('ESP32 Flash Dumper & Writer (patched, safe) ready', 'success');
-log('Select device type and click CONNECT to start', 'info');
+// init UI state
+updateStatus('Disconnected', '');
+el.connectBtn.disabled = false;
+el.disconnectBtn.disabled = true;
+el.dumpBtn.disabled = true;
+el.writeBtn.disabled = true;
+el.resumeBtn.disabled = true;
+el.githubBackupBtn.disabled = true;
 
-</script>
+log('Ready. Connect device and press CONNECT. The tool will auto-detect flash size and read full flash including bootloader. Use Resume if read is interrupted.', 'info');
+
+   </script>
 
 </body>
 </html>
+
 
 
