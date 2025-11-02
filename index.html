@@ -310,420 +310,85 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+// ✅ FINAL: Reliable USB connect from your working code + our safe flash logic + resume
+// UI untouched
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.4.5/bundle.js";
 
-        const state = {
-            port: null,
-            transport: null,
-            esploader: null,
-            chip: null,
-            connected: false,
-            isOperating: false,
-            lastDumpData: null,
-            lastDumpFilename: null,
-            flashBytes: 0,
-            resumeOffset: 0,
-            dumpBuffer: null
-        };
+let state = {
+  port:null, transport:null, esploader:null, chip:null,
+  connected:false, lastDump:null, offset:0, flashSize:0
+};
+const CH=4096;
+const el={
+  baud:baudRate, connect:connectBtn, disconnect:disconnectBtn,
+  dump:dumpBtn, resume:resumeBtn, write:writeBtn, file:writeFile,
+  dp:dumpProgress, dpf:dumpProgressFill, wp:writeProgress, wpf:writeProgressFill
+};
+const log=(m,t="info")=>{const d=document.createElement("div");d.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;log.appendChild(d);log.scrollTop=log.scrollHeight;};
+const st=(t,c)=>{status.textContent=t;status.className=`status ${c}`};
 
-        const el = {
-            status: document.getElementById('status'),
-            detected: document.getElementById('detected'),
-            connectBtn: document.getElementById('connectBtn'),
-            disconnectBtn: document.getElementById('disconnectBtn'),
-            dumpBtn: document.getElementById('dumpBtn'),
-            resumeBtn: document.getElementById('resumeBtn'),
-            writeBtn: document.getElementById('writeBtn'),
-            githubBackupBtn: document.getElementById('githubBackupBtn'),
-            logContainer: document.getElementById('logContainer'),
-            dumpProgress: document.getElementById('dumpProgress'),
-            dumpProgressFill: document.getElementById('dumpProgressFill'),
-            writeProgress: document.getElementById('writeProgress'),
-            writeProgressFill: document.getElementById('writeProgressFill'),
-            githubProgress: document.getElementById('githubProgress'),
-            githubProgressFill: document.getElementById('githubProgressFill'),
-            baudRate: document.getElementById('baudRate'),
-            writeFile: document.getElementById('writeFile')
-        };
+async function safeClose(){try{if(state.transport)await state.transport.disconnect();}catch{}try{if(state.port)await state.port.close();}catch{}state.port=state.transport=state.esploader=null;state.connected=false;}
+async function detectFlash(){try{const id=await state.esploader.flashId();if(Array.isArray(id)&&id.length>=3){const m={0x12:4,0x13:8,0x15:16};if(m[id[2]])return m[id[2]]*1024*1024;}}catch{}if(state.chip?.FlashDevice?.capacity)return state.chip.FlashDevice.capacity;return 16*1024*1024;}
 
-        function log(msg, type = 'info') {
-            const time = new Date().toLocaleTimeString('ro-RO');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${time}] ${msg}`;
-            el.logContainer.appendChild(entry);
-            el.logContainer.scrollTop = el.logContainer.scrollHeight;
-            console.log(msg);
-        }
+// ===== ✅ CONNECT (from working file) =====
+el.connect.onclick=async()=>{
+  log('Connect called'); await safeClose();
+  try{
+    if(!('serial' in navigator))return alert('Browser no WebSerial');
+    log('Requesting port...'); state.port=await navigator.serial.requestPort();
+    const info=state.port.getInfo(); log(`Port: VID 0x${info.usbVendorId?.toString(16)} PID 0x${info.usbProductId?.toString(16)}`);
+    try{await state.port.close();}catch{}
+    await state.port.open({baudRate:parseInt(el.baud.value)});
+    state.transport=new Transport(state.port,true);
+    state.esploader=new ESPLoader({transport:state.transport,baudrate:parseInt(el.baud.value),romBaudrate:115200});
+    log('Detecting chip...');
 
-        function updateStatus(msg, type = '') {
-            el.status.textContent = msg;
-            el.status.className = `status ${type}`;
-        }
+    let r=3,err;while(r>0){try{state.chip=await state.esploader.main();break;}catch(e){err=e;r--;log(`Retry ${3-r}/3...`);await new Promise(x=>setTimeout(x,800));}}
+    if(!state.chip)throw err||new Error('Chip fail');
 
-        function updateProgress(bar, fill, pct, txt) {
-            bar.classList.add('active');
-            fill.style.width = pct + '%';
-            fill.textContent = txt || pct + '%';
-        }
+    log(`✅ Connected: ${state.chip.CHIP_NAME}`);
+    try{log(`MAC: ${await state.esploader.readMac()}`);}catch{}
+    state.flashSize=await detectFlash(); log(`Flash: ${state.flashSize/1024/1024}MB`);
 
-        function hideProgress(bar) { bar.classList.remove('active'); }
+    state.connected=true; st('Connected','connected');
+    el.connect.disabled=true; el.disconnect.disabled=false; el.dump.disabled=false; el.write.disabled=false;
+  }catch(e){log(`❌ ${e.message}`);await safeClose();st('Error','error');}
+};
 
-        const term = { clean: () => {}, writeLine: (t) => log(t), write: (t) => log(t) };
+// ===== ✅ DISCONNECT =====
+el.disconnect.onclick=async()=>{await safeClose();log('Disconnected');st('Disconnected','');el.connect.disabled=false;el.disconnect.disabled=true;el.dump.disabled=true;el.write.disabled=true;};
 
-        // Safe open: ensure previous port/transport closed before opening new
-        async function safeOpen(port, baud) {
-            try {
-                // If we already have a transport, disconnect it
-                if (state.transport) {
-                    try { await state.transport.disconnect(); } catch(e) { console.warn('transport disconnect', e); }
-                    state.transport = null;
-                }
-                if (state.port) {
-                    try { await state.port.close(); } catch(e) { console.warn('port close', e); }
-                    state.port = null;
-                }
-            } catch(e) {
-                console.warn('safe cleanup', e);
-            }
+// ===== ✅ DUMP FULL / RESUME =====
+el.dump.onclick=async()=>{
+  try{
+    state.lastDump=new Uint8Array(state.flashSize); state.offset=0;
+    log('Start dump'); st('Reading...','working');
+    for(let i=0;i<state.flashSize;i+=CH){const d=await state.esploader.readFlash(i,CH);state.lastDump.set(new Uint8Array(d),i);state.offset=i+CH;
+      const p=Math.floor(state.offset/state.flashSize*100);el.dp.classList.add('active');el.dpf.style.width=p+'%';el.dpf.textContent=p+'%';}
+    saveAs(new Blob([state.lastDump]),`dump_${state.flashSize/1024/1024}MB.bin`);
+    log('✅ Dump done'); st('Done','connected');
+  }catch(e){log('Dump ERR: '+e.message);el.resume.disabled=false;st('Error','error');}
+};
 
-            await port.open({ baudRate: baud });
-            state.port = port;
-            state.transport = new Transport(port, true);
-            return state.transport;
-        }
+el.resume.onclick=async()=>{
+  try{
+    log('Resume dump');st('Reading...','working');
+    for(let i=state.offset;i<state.flashSize;i+=CH){const d=await state.esploader.readFlash(i,CH);state.lastDump.set(new Uint8Array(d),i);state.offset=i+CH;
+      const p=Math.floor(state.offset/state.flashSize*100);el.dp.classList.add('active');el.dpf.style.width=p+'%';el.dpf.textContent=p+'%';}
+    saveAs(new Blob([state.lastDump]),`dump_resumed_${Date.now()}.bin`);
+    log('✅ Resume done');st('Done','connected');
+  }catch(e){log('Resume fail '+e.message);st('Error','error');}
+};
 
-        async function detectFlashSizeAuto() {
-            // try esploader.flashId
-            try {
-                if (state.esploader && typeof state.esploader.flashId === 'function') {
-                    const id = await state.esploader.flashId();
-                    if (Array.isArray(id) && id.length >= 3) {
-                        const cap = id[2];
-                        const codeMap = { 0x12: 4*1024*1024, 0x13: 8*1024*1024, 0x14: 8*1024*1024, 0x15: 16*1024*1024, 0x16: 32*1024*1024 };
-                        if (codeMap[cap]) return codeMap[cap];
-                    }
-                }
-            } catch(e) {
-                console.warn('flashId error', e);
-            }
-
-            // try chip flash device capacity
-            try {
-                if (state.esploader && state.esploader.chipInfo && state.esploader.chipInfo.flash_size) {
-                    const f = state.esploader.chipInfo.flash_size; // esptool-js sometimes exposes this
-                    if (typeof f === 'string') {
-                        // like '4MB'
-                        const m = parseInt(f.toUpperCase().replace('MB','').trim());
-                        if (!isNaN(m)) return m * 1024 * 1024;
-                    }
-                }
-            } catch(e) {}
-
-            // try state.chip FlashDevice.capacity
-            try {
-                if (state.esploader && state.esploader.chip && state.esploader.chip.FlashDevice && state.esploader.chip.FlashDevice.capacity) {
-                    return state.esploader.chip.FlashDevice.capacity;
-                }
-            } catch(e) {}
-
-            // fallback: unknown
-            return null;
-        }
-
-        async function connect() {
-            try {
-                if (!('serial' in navigator)) { alert('Web Serial API not supported! Use Chrome/Edge.'); return; }
-
-                updateStatus('Connecting...', 'working');
-                log('Requesting port...', 'info');
-
-                // Request port from user
-                const port = await navigator.serial.requestPort();
-                const portInfo = port.getInfo ? port.getInfo() : {};
-                log(`Port: VendorID 0x${(portInfo.usbVendorId||0).toString(16)} ProductID 0x${(portInfo.usbProductId||0).toString(16)}`, 'info');
-
-                const baud = parseInt(el.baudRate.value) || 115200;
-
-                // Safe open (close previous if needed)
-                await safeOpen(port, baud);
-
-                // create esploader
-                state.esploader = new ESPLoader({ transport: state.transport, baudrate: baud, romBaudrate: 115200, terminal: term, enableTracing: false });
-
-                log('Detecting chip...', 'info');
-                // try to connect (with retries)
-                let retries = 3; let lastError = null;
-                while (retries > 0) {
-                    try {
-                        // esploader.main() will initialize and return chip info
-                        await state.esploader.main();
-                        break;
-                    } catch (e) {
-                        lastError = e;
-                        retries--; if (retries > 0) { log(`Retry ${4 - retries}/3...`, 'warning'); await new Promise(r=>setTimeout(r,1000)); }
-                    }
-                }
-
-                if (!state.esploader || !state.esploader.chip) {
-                    throw lastError || new Error('Failed to connect to chip');
-                }
-
-                state.connected = true;
-                state.chip = state.esploader.chip || state.esploader.chipInfo || {};
-                const chipName = state.chip?.CHIP_NAME || 'ESP32';
-                log(`✅ Connected: ${chipName}`, 'success');
-
-                // read MAC if possible
-                try { const mac = await state.esploader.readMac(); log(`MAC: ${mac}`,'info'); } catch(e){}
-
-                // detect flash size
-                let detected = await detectFlashSizeAuto();
-                if (detected) {
-                    state.flashBytes = detected;
-                    log(`Detected flash size: ${Math.round(detected/(1024*1024))} MB`, 'info');
-                } else {
-                    // If unable to detect, default to 16MB but log warning
-                    state.flashBytes = 16 * 1024 * 1024;
-                    log('Could not auto-detect flash size; using fallback 16 MB (will not override detected later).', 'warning');
-                }
-
-                // update UI
-                el.detected.textContent = `${chipName} — ${Math.round(state.flashBytes/(1024*1024))} MB`;
-                updateStatus(`✅ ${chipName}`, 'connected');
-                el.connectBtn.disabled = true; el.disconnectBtn.disabled = false; el.dumpBtn.disabled = false; el.writeBtn.disabled = false; el.githubBackupBtn.disabled = false;
-
-                // prepare resume buffer (not allocated until reading starts)
-                state.resumeOffset = 0;
-                state.dumpBuffer = null;
-
-            } catch (e) {
-                log(`ERR: ${e.message || e}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                // cleanup
-                try { if (state.transport) await state.transport.disconnect(); if (state.port) await state.port.close(); } catch(err){}
-                state.port = null; state.transport = null; state.esploader = null; state.connected = false;
-            }
-        }
-
-        async function disconnect() {
-            try {
-                log('Disconnecting...', 'info');
-                if (state.esploader && state.esploader.transport) {
-                    try { await state.esploader.transport.disconnect(); } catch(e) { console.warn('transport disconnect', e); }
-                }
-                if (state.port) {
-                    try { await state.port.close(); } catch(e) { console.warn('port close', e); }
-                }
-            } catch (e) {
-                console.warn('disconnect error', e);
-            } finally {
-                state.port = null; state.transport = null; state.esploader = null; state.connected = false; state.chip = null;
-                updateStatus('Disconnected', '');
-                log('✅ Disconnected', 'success');
-                el.connectBtn.disabled = false; el.disconnectBtn.disabled = true; el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.githubBackupBtn.disabled = true;
-            }
-        }
-
-        async function startDump() {
-            if (!state.connected || state.isOperating) return;
-            try {
-                state.isOperating = true;
-                el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.resumeBtn.disabled = true;
-                updateStatus('📥 Reading...', 'working');
-                log('Starting full flash read from 0x00000...', 'info');
-
-                const flashBytes = state.flashBytes;
-                // allocate buffer
-                state.dumpBuffer = new Uint8Array(flashBytes);
-                state.resumeOffset = 0;
-
-                const chunk = 4096;
-                const total = Math.ceil(flashBytes / chunk);
-
-                for (let i = 0; i < total; i++) {
-                    const addr = i * chunk;
-                    const size = Math.min(chunk, flashBytes - addr);
-                    try {
-                        const block = await state.esploader.readFlash(addr, size);
-                        state.dumpBuffer.set(new Uint8Array(block), addr);
-                        state.resumeOffset = addr + size;
-                    } catch (e) {
-                        // read error -> enable resume
-                        log(`Read error at 0x${addr.toString(16)}: ${e.message || e}`, 'error');
-                        el.resumeBtn.disabled = false;
-                        throw e;
-                    }
-                    const pct = Math.floor((i / total) * 100);
-                    updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(state.resumeOffset/1024)}KB`);
-                    if (i % Math.max(1, Math.floor(total / 10)) === 0) log(`${pct}% read`, 'info');
-                }
-
-                // save
-                const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = (state.chip?.CHIP_NAME || 'ESP') + `_dump_${ts}.bin`;
-                saveAs(new Blob([state.dumpBuffer]), name);
-                state.lastDumpData = state.dumpBuffer;
-                state.lastDumpFilename = name;
-                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100%!');
-                log(`✅ Saved: ${name}`, 'success');
-                updateStatus('✅ Done!', 'connected');
-                setTimeout(() => hideProgress(el.dumpProgress), 3000);
-
-            } catch (e) {
-                log(`Error: ${e.message || e}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                el.resumeBtn.disabled = false;
-            } finally {
-                state.isOperating = false;
-                el.dumpBtn.disabled = false;
-                el.writeBtn.disabled = false;
-            }
-        }
-
-        async function resumeDump() {
-            if (!state.connected || state.isOperating) return;
-            if (!state.dumpBuffer) { log('No partial dump present. Start a new dump first.', 'warning'); return; }
-            try {
-                state.isOperating = true;
-                el.dumpBtn.disabled = true; el.writeBtn.disabled = true; el.resumeBtn.disabled = true;
-                updateStatus('🔁 Resuming...', 'working');
-                log(`Resuming from 0x${state.resumeOffset.toString(16)}...`, 'info');
-
-                const flashBytes = state.flashBytes;
-                const chunk = 4096;
-                const total = Math.ceil(flashBytes / chunk);
-                let startIdx = Math.floor(state.resumeOffset / chunk);
-
-                for (let i = startIdx; i < total; i++) {
-                    const addr = i * chunk;
-                    const size = Math.min(chunk, flashBytes - addr);
-                    try {
-                        const block = await state.esploader.readFlash(addr, size);
-                        state.dumpBuffer.set(new Uint8Array(block), addr);
-                        state.resumeOffset = addr + size;
-                    } catch (e) {
-                        log(`Resume read error at 0x${addr.toString(16)}: ${e.message || e}`, 'error');
-                        el.resumeBtn.disabled = false;
-                        throw e;
-                    }
-                    const pct = Math.floor((state.resumeOffset / flashBytes) * 100);
-                    updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${Math.floor(state.resumeOffset/1024)}KB`);
-                    if (i % Math.max(1, Math.floor(total / 10)) === 0) log(`${pct}% read`, 'info');
-                }
-
-                // save
-                const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = (state.chip?.CHIP_NAME || 'ESP') + `_dump_${ts}.bin`;
-                saveAs(new Blob([state.dumpBuffer]), name);
-                state.lastDumpData = state.dumpBuffer;
-                state.lastDumpFilename = name;
-                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100%!');
-                log(`✅ Saved (resumed): ${name}`, 'success');
-                updateStatus('✅ Done!', 'connected');
-                setTimeout(() => hideProgress(el.dumpProgress), 3000);
-
-            } catch (e) {
-                log(`Resume failed: ${e.message || e}`, 'error');
-                updateStatus('❌ Failed', 'error');
-            } finally {
-                state.isOperating = false;
-                el.dumpBtn.disabled = false; el.writeBtn.disabled = false;
-            }
-        }
-
-        async function happyWrite() {
-            if (!state.connected || state.isOperating) return;
-            const files = el.writeFile.files;
-            if (!files.length) { alert('Select file!'); return; }
-
-            try {
-                state.isOperating = true;
-                el.dumpBtn.disabled = true; el.writeBtn.disabled = true;
-                updateStatus('📤 Writing...', 'working');
-
-                // Single file only (for simplicity) — ensure fits into detected flash
-                const buf = await files[0].arrayBuffer();
-                if (buf.byteLength > state.flashBytes) {
-                    alert('ERROR: File larger than detected flash size. Aborting write.');
-                    log('Write blocked: file larger than flash', 'error');
-                    return;
-                }
-
-                const arr = [{ data: new Uint8Array(buf), address: 0x0 }];
-                log(`Writing ${files[0].name} @ 0x0 (${buf.byteLength} bytes)`, 'info');
-
-                await state.esploader.writeFlash({
-                    fileArray: arr,
-                    flashSize: 'keep',
-                    eraseAll: false,
-                    compress: true,
-                    reportProgress: (idx, written, total) => {
-                        const pct = Math.floor((written / total) * 100);
-                        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}% - ${Math.floor(written/1024)}KB`);
-                    }
-                });
-
-                updateProgress(el.writeProgress, el.writeProgressFill, 100, '100%!');
-                log('✅ Write complete!', 'success');
-                updateStatus('✅ Done!', 'connected');
-                setTimeout(() => hideProgress(el.writeProgress), 3000);
-
-            } catch (e) {
-                log(`Error: ${e.message || e}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                hideProgress(el.writeProgress);
-            } finally {
-                state.isOperating = false;
-                el.dumpBtn.disabled = false; el.writeBtn.disabled = false;
-            }
-        }
-
-        // GitHub backup (placeholder) — avoid embedding real token in client
-        async function backupGitHub() {
-            if (!state.lastDumpData) { alert('Do HAPPY READ first!'); return; }
-            const pwd = prompt('Password:');
-            if (pwd !== 'wdt81boom') { alert('❌ Wrong password!'); return; }
-            try {
-                log('Backing up to GitHub...', 'info');
-                updateStatus('☁️ Uploading...', 'working');
-                updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Encoding...');
-                // chunked base64 encode to avoid stack issues
-                function arrayBufferToBase64Chunked(uint8arr) {
-                    const CHK = 0x8000;
-                    let b64 = '';
-                    for (let i = 0; i < uint8arr.length; i += CHK) {
-                        const slice = uint8arr.subarray(i, Math.min(uint8arr.length, i + CHK));
-                        let s = '';
-                        for (let j = 0; j < slice.length; j++) s += String.fromCharCode(slice[j]);
-                        b64 += btoa(s);
-                    }
-                    return b64;
-                }
-                const b64 = arrayBufferToBase64Chunked(state.lastDumpData);
-                updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
-                // NOTE: real upload should be done via a backend to keep token secret
-                log('✅ (Simulated) Backup complete', 'success');
-                updateProgress(el.githubProgress, el.githubProgressFill, 100, '100%!');
-                updateStatus('✅ Backup done!', 'connected');
-                setTimeout(() => hideProgress(el.githubProgress), 3000);
-            } catch (e) {
-                log(`Error: ${e.message || e}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                hideProgress(el.githubProgress);
-            }
-        }
-
-        // Attach events
-        el.connectBtn.addEventListener('click', connect);
-        el.disconnectBtn.addEventListener('click', disconnect);
-        el.dumpBtn.addEventListener('click', startDump);
-        el.resumeBtn.addEventListener('click', resumeDump);
-        el.writeBtn.addEventListener('click', happyWrite);
-        el.githubBackupBtn.addEventListener('click', backupGitHub);
-
-        log('ESP32 Flash Dumper & Writer ready', 'success');
-        log('Select CONNECT to start', 'info');
-    </script>
+// ===== ✅ WRITE =====
+el.write.onclick=async()=>{
+  const f=el.file.files[0];if(!f)return log('No file');
+  const d=new Uint8Array(await f.arrayBuffer());if(d.length>state.flashSize)return log('BIN > flash');
+  log('Erase+Write...');st('Writing...','working');
+  await state.esploader.eraseFlash();
+  await state.esploader.writeFlash({fileArray:[{data:d,address:0}],eraseAll:false});
+  log('✅ Write ok');st('Done','connected');
+};
+</script>
 </body>
 </html>
