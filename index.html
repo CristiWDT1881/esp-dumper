@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -77,13 +78,14 @@
             display: block;
             margin-bottom: 5px;
         }
-        select, input[type="file"] {
+        select, input[type="file"], input[readonly] {
             width: 100%;
             padding: 8px;
             border: 3px solid #5B9BD5;
             border-radius: 8px;
             background: white;
         }
+        input[readonly] { background: #f0f8ff; font-weight: bold; color: #1a5f3f; }
         .button-group {
             display: flex;
             gap: 10px;
@@ -206,57 +208,51 @@
 
         <div class="section first-box">
             <div class="section-content">
-                <h2>📡 Connect Device</h2>
+                <h2>Connect Device</h2>
                 <div id="status" class="status">Status: Disconnected</div>
             
-            <div class="control-group">
-                <label>Device Type:</label>
-                <select id="deviceType">
-                    <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN ⭐</option>
-                    <option value="ESP32-S3">ESP32-S3 (Generic, LilyGO)</option>
-                    <option value="ESP32-S3-DevKit">ESP32-S3-DevKitC</option>
-                    <option value="ESP32">ESP32 (DevKit, NodeMCU)</option>
-                    <option value="ESP32-C3">ESP32-C3 (RISC-V)</option>
-                    <option value="ESP8266">ESP8266 (NodeMCU, Wemos)</option>
-                </select>
-            </div>
+                <div class="control-group">
+                    <label>Detected Chip:</label>
+                    <input type="text" id="detectedChip" readonly placeholder="Connect to detect...">
+                </div>
 
-            <div class="control-group">
-                <label>Flash Size:</label>
-                <select id="flashSize">
-                    <option value="4">4 MB</option>
-                    <option value="8">8 MB</option>
-                    <option value="16" selected>16 MB ⭐</option>
-                    <option value="32">32 MB</option>
-                </select>
-            </div>
+                <div class="control-group">
+                    <label>Flash Size:</label>
+                    <select id="flashSize">
+                        <option value="4">4 MB</option>
+                        <option value="8">8 MB</option>
+                        <option value="16" selected>16 MB</option>
+                        <option value="32">32 MB</option>
+                    </select>
+                </div>
 
-            <div class="control-group">
-                <label>Baud Rate:</label>
-                <select id="baudRate">
-                    <option value="115200">115200</option>
-                    <option value="230400">230400</option>
-                    <option value="460800" selected>460800 ⭐</option>
-                    <option value="921600">921600</option>
-                </select>
-            </div>
+                <div class="control-group">
+                    <label>Baud Rate:</label>
+                    <select id="baudRate">
+                        <option value="115200">115200</option>
+                        <option value="230400">230400</option>
+                        <option value="460800" selected>460800</option>
+                        <option value="921600">921600</option>
+                    </select>
+                </div>
 
-            <div class="button-group">
-                <button id="connectBtn" class="btn-connect">CONNECT</button>
-                <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
-            </div>
+                <div class="button-group">
+                    <button id="connectBtn" class="btn-connect">CONNECT</button>
+                    <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
+                </div>
             </div>
             <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
         </div>
 
         <div class="section">
-            <h2>📥 Happy Read - Dump Flash</h2>
+            <h2>Happy Read - Dump Flash</h2>
             <p><strong>1.</strong> Connect device via USB</p>
             <p><strong>2.</strong> Click HAPPY READ to dump entire flash</p>
             <p><strong>3.</strong> File saved to Downloads (10-15 min for 16MB)</p>
 
             <div class="button-group">
-                <button id="dumpBtn" class="btn-read" disabled>📥 HAPPY READ</button>
+                <button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
+                <button id="resumeBtn" class="btn-read" style="display:none;">RESUME DUMP</button>
             </div>
 
             <div id="dumpProgress" class="progress-bar">
@@ -265,12 +261,12 @@
         </div>
 
         <div class="section">
-            <h2>☁️ Happy Backup to GitHub</h2>
+            <h2>Happy Backup to GitHub</h2>
             <p><strong>1.</strong> First do HAPPY READ</p>
             <p><strong>2.</strong> Click button and enter password</p>
 
             <div class="button-group">
-                <button id="githubBackupBtn" class="btn-write" disabled>☁️ BACKUP TO GITHUB</button>
+                <button id="githubBackupBtn" class="btn-write" disabled>BACKUP TO GITHUB</button>
             </div>
 
             <div id="githubProgress" class="progress-bar">
@@ -279,7 +275,7 @@
         </div>
 
         <div class="section">
-            <h2>📤 Happy Write - Flash Firmware</h2>
+            <h2>Happy Write - Flash Firmware</h2>
             <p><strong>1.</strong> Select firmware (.bin)</p>
             <p><strong>2.</strong> Click HAPPY WRITE</p>
 
@@ -289,7 +285,7 @@
             </div>
 
             <div class="button-group">
-                <button id="writeBtn" class="btn-write" disabled>📤 HAPPY WRITE</button>
+                <button id="writeBtn" class="btn-write" disabled>HAPPY WRITE</button>
             </div>
 
             <div id="writeProgress" class="progress-bar">
@@ -298,14 +294,14 @@
         </div>
 
         <div class="section">
-            <h2>📋 Operation Log</h2>
+            <h2>Operation Log</h2>
             <div id="logContainer" class="log-container">
                 <div class="log-entry info">Ready! Connect device to start...</div>
             </div>
         </div>
 
         <div class="section">
-            <h2>📻 Radio Live</h2>
+            <h2>Radio Live</h2>
             <div class="radio-links">
                 <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
                     <img src="./logocultural.svg" alt="Radio Cultural" onerror="this.style.display='none'">
@@ -320,25 +316,33 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+    <script src="https://cdn.jsdelivr.net/npm/@dannyvankooten/nosleep.js@1.0.0/dist/NoSleep.min.js"></script>
 
-        const state = { 
-            port: null, 
-            esploader: null, 
-            transport: null, 
-            chip: null, 
-            connected: false, 
-            isOperating: false, 
-            lastDumpData: null, 
-            lastDumpFilename: null 
+    <script type="module">
+        import { ESPLoader } from 'https://cdn.skypack.dev/esptool-js';
+        import { Transport } from 'https://cdn.skypack.dev/esptool-js/serial.js';
+
+        const state = {
+            port: null,
+            transport: null,
+            esp: null,
+            chip: null,
+            mac: null,
+            connected: false,
+            isOperating: false,
+            lastDumpData: null,
+            lastDumpFilename: null,
+            dumpOffset: 0,
+            dumpTotal: 0,
+            wakeLock: null,
+            noSleep: new NoSleep()
         };
-        
-        const GITHUB = { 
-            token: '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', 
-            repo: 'CristiWDT1881/esp-dumper', 
-            folder: 'happydumps', 
-            password: 'wdt81boom' 
+
+        const GITHUB = {
+            token: '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',
+            repo: 'CristiWDT1881/esp-dumper',
+            folder: 'happydumps',
+            password: 'wdt81boom'
         };
 
         const el = {
@@ -346,6 +350,7 @@
             connectBtn: document.getElementById('connectBtn'),
             disconnectBtn: document.getElementById('disconnectBtn'),
             dumpBtn: document.getElementById('dumpBtn'),
+            resumeBtn: document.getElementById('resumeBtn'),
             writeBtn: document.getElementById('writeBtn'),
             githubBackupBtn: document.getElementById('githubBackupBtn'),
             logContainer: document.getElementById('logContainer'),
@@ -355,7 +360,7 @@
             writeProgressFill: document.getElementById('writeProgressFill'),
             githubProgress: document.getElementById('githubProgress'),
             githubProgressFill: document.getElementById('githubProgressFill'),
-            deviceType: document.getElementById('deviceType'),
+            detectedChip: document.getElementById('detectedChip'),
             flashSize: document.getElementById('flashSize'),
             baudRate: document.getElementById('baudRate'),
             writeFile: document.getElementById('writeFile')
@@ -381,292 +386,185 @@
             fill.textContent = txt || pct + '%';
         }
 
-        function hideProgress(bar) { 
-            bar.classList.remove('active'); 
+        function hideProgress(bar) {
+            setTimeout(() => bar.classList.remove('active'), 3000);
         }
 
-        const term = { 
-            clean: () => {}, 
-            writeLine: (t) => log(t, 'info'), 
-            write: (t) => log(t, 'info') 
-        };
+        async function enableWakeLock() {
+            try {
+                state.wakeLock = await navigator.wakeLock?.request('screen');
+                log('Wake Lock activat', 'success');
+            } catch (e) {}
+            state.noSleep.enable();
+        }
+
+        function disableWakeLock() {
+            if (state.wakeLock) state.wakeLock.release();
+            state.noSleep.disable();
+        }
 
         async function connect() {
             try {
-                if (!('serial' in navigator)) {
-                    alert('Web Serial not supported! Use Chrome/Edge.');
-                    return;
-                }
+                if (!('serial' in navigator)) throw new Error('Web Serial nu e suportat!');
 
-                if (state.transport) {
-                    try { await state.transport.disconnect(); } catch(e) {}
-                    await new Promise(r => setTimeout(r, 300));
-                }
+                updateStatus('Se conectează...', 'working');
+                log('Cer port...', 'info');
 
-                updateStatus('Connecting...', 'working');
-                log('Requesting port...', 'info');
-                
                 state.port = await navigator.serial.requestPort();
-                
-                let baud = parseInt(el.baudRate.value);
-                if (el.deviceType.value.includes('ESP32-S3') && baud > 460800) {
-                    baud = 460800;
-                    log(`Baud adjusted to ${baud}`, 'warning');
-                    el.baudRate.value = baud.toString();
-                }
-                
-                log(`Opening at ${baud} baud...`, 'info');
-                
-                state.transport = new Transport(state.port, true);
-                state.esploader = new ESPLoader({
-                    transport: state.transport,
-                    baudrate: baud,
-                    romBaudrate: 115200,
-                    terminal: term,
-                    enableTracing: false
-                });
-                
-                log('Syncing...', 'info');
-                let retries = 3;
-                while (retries-- > 0) {
-                    try {
-                        state.chip = await state.esploader.main();
-                        break;
-                    } catch (e) {
-                        if (retries > 0) {
-                            log(`Retry ${4-retries}/3...`, 'warning');
-                            await new Promise(r => setTimeout(r, 500));
-                        } else {
-                            throw new Error('Sync failed');
-                        }
-                    }
-                }
-                
-                if (!state.chip) throw new Error('No chip');
+                const baud = parseInt(el.baudRate.value);
+                await state.port.open({ baudRate: baud });
+
+                state.transport = new Transport(state.port);
+                state.esp = new ESPLoader(state.transport, baud, (msg) => log(msg, 'info'));
+                await state.esp.initialize();
+
+                state.chip = await state.esp.chipName();
+                state.mac = await state.esp.readMac();
+
+                el.detectedChip.value = `${state.chip} (${state.mac})`;
+                log(`Cip: ${state.chip}`, 'success');
+                log(`MAC: ${state.mac}`, 'info');
 
                 state.connected = true;
-                const chipName = state.chip?.CHIP_NAME || el.deviceType.value;
-                log(`✅ Connected: ${chipName}`, 'success');
-                
-                try { 
-                    const mac = await state.esploader.readMac();
-                    log(`MAC: ${mac}`, 'info');
-                } catch(e) {}
+                updateStatus(`Conectat: ${state.chip}`, 'connected');
 
-                updateStatus(`✅ ${chipName}`, 'connected');
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
                 el.dumpBtn.disabled = false;
                 el.writeBtn.disabled = false;
                 el.githubBackupBtn.disabled = false;
-                
+
             } catch (e) {
-                log(`❌ ${e.message}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                try {
-                    if (state.transport) await state.transport.disconnect();
-                    if (state.port) await state.port.close();
-                } catch{}
-                state.port = null;
-                state.transport = null;
-                state.esploader = null;
-                state.connected = false;
+                log(`Eroare: ${e.message}`, 'error');
+                updateStatus('Eșec conectare', 'error');
+                await disconnect();
             }
         }
 
         async function disconnect() {
             try {
-                if (state.transport) await state.transport.disconnect();
-                await new Promise(r => setTimeout(r, 300));
+                if (state.transport) await state.transport.close gripped();
                 if (state.port) await state.port.close();
-                
-                state.port = null;
-                state.esploader = null;
-                state.transport = null;
-                state.chip = null;
-                state.connected = false;
-                
-                updateStatus('Disconnected', '');
-                log('✅ Disconnected', 'success');
-                
-                el.connectBtn.disabled = false;
-                el.disconnectBtn.disabled = true;
-                el.dumpBtn.disabled = true;
-                el.writeBtn.disabled = true;
-                el.githubBackupBtn.disabled = true;
-            } catch (e) {
-                log(`Error: ${e.message}`, 'error');
-            }
+                disableWakeLock();
+            } catch (e) {}
+            Object.assign(state, { port: null, transport: null, esp: null, chip: null, mac: null, connected: false, isOperating: false });
+            updateStatus('Deconectat', '');
+            el.connectBtn.disabled = false;
+            el.disconnectBtn.disabled = true;
+            el.dumpBtn.disabled = true;
+            el.writeBtn.disabled = true;
+            el.githubBackupBtn.disabled = true;
+            el.resumeBtn.style.display = 'none';
+            el.resumeBtn.disabled = true;
         }
 
-        async function happyRead() {
+        async function startDump(resume = false) {
             if (!state.connected || state.isOperating) return;
-            
             state.isOperating = true;
             el.dumpBtn.disabled = true;
+            el.resumeBtn.style.display = 'none';
+
+            const flashBytes = parseInt(el.flashSize.value) * 1024 * 1024;
+            const chunk = 0x10000;
+            const totalChunks = Math.ceil(flashBytes / chunk);
+            const data = new Uint8Array(flashBytes);
+
+            let offset = resume ? state.dumpOffset : 0;
+            let startChunk = Math.floor(offset / chunk);
+
+            await enableWakeLock();
 
             try {
-                log('=== HAPPY READ START ===', 'success');
-                updateStatus('📥 Reading...', 'working');
+                log(resume ? '=== RESUME DUMP ===' : '=== HAPPY READ START ===', 'success');
+                updateStatus('Se citește...', 'working');
 
-                const flashBytes = parseInt(el.flashSize.value) * 1024 * 1024;
-                log(`Reading ${(flashBytes/1024/1024)} MB...`, 'info');
-                
-                const chunk = 4096;
-                const total = Math.ceil(flashBytes / chunk);
-                const data = new Uint8Array(flashBytes);
-                let offset = 0;
-
-                for (let i = 0; i < total; i++) {
+                for (let i = startChunk; i < totalChunks; i++) {
                     const addr = i * chunk;
                     const size = Math.min(chunk, flashBytes - offset);
-                    
-                    const block = await state.esploader.readFlash(addr, size);
+                    const block = await state.esp.readFlash(addr, size);
                     data.set(new Uint8Array(block), offset);
                     offset += size;
-                    
-                    const pct = Math.floor((i / total) * 100);
-                    updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}%`);
-                    
+
+                    const pct = Math.floor((offset / flashBytes) * 100);
+                    updateProgress(el.dumpProgress, el.dumpProgressFill, pct);
+
+                    state.dumpOffset = offset;
+                    state.dumpTotal = flashBytes;
+
                     if (pct % 10 === 0 && pct > 0) {
-                        log(`${pct}% - ${(offset/1024/1024).toFixed(1)}MB`, 'info');
+                        log(`${pct}% - ${(offset/1024/1024).toFixed(2)} MB`, 'info');
                     }
                 }
 
                 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = `ESP32_dump_${ts}.bin`;
-                
+                const name = `${state.chip.replace(/ /g, '_')}_${state.mac}_${ts}.bin`;
                 const blob = new Blob([data]);
                 saveAs(blob, name);
-                
+
                 state.lastDumpData = data;
                 state.lastDumpFilename = name;
-                
-                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '✅ DONE');
-                log(`✅ Saved: ${name}`, 'success');
-                updateStatus('✅ Complete!', 'connected');
-                setTimeout(() => hideProgress(el.dumpProgress), 3000);
-                
+                state.dumpOffset = 0;
+
+                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'DONE');
+                log(`Salvat: ${name}`, 'success');
+                hideProgress(el.dumpProgress);
+                updateStatus('Complet!', 'connected');
+
             } catch (e) {
-                log(`❌ ${e.message}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                alert(`Failed: ${e.message}`);
+                log(`Oprit la ${((offset/flashBytes)*100).toFixed(1)}%`, 'error');
+                el.resumeBtn.style.display = 'inline-block';
+                el.resumeBtn.disabled = false;
+                el.resumeBtn.onclick = () => startDump(true);
+                updateStatus(`Oprit la ${((offset/flashBytes)*100).toFixed(1)}%`, 'error');
             } finally {
                 state.isOperating = false;
                 el.dumpBtn.disabled = false;
+                disableWakeLock();
             }
         }
 
-        async function happyWrite() {
-            if (!state.connected || state.isOperating) return;
-            
-            const files = el.writeFile.files;
-            if (!files.length) {
-                alert('Select file first!');
-                return;
-            }
-
-            const erase = confirm('Erase flash?\n\n✅ YES\n❌ NO');
-            
+        el.connectBtn.onclick = connect;
+        el.disconnectBtn.onclick = disconnect;
+        el.dumpBtn.onclick = () => startDump(false);
+        el.writeBtn.onclick = async () => {
+            if (!state.connected || !el.writeFile.files.length) return;
+            if (!confirm('Șterge flash-ul?')) return;
             state.isOperating = true;
             el.writeBtn.disabled = true;
-
+            await enableWakeLock();
             try {
-                log('=== HAPPY WRITE START ===', 'success');
-                updateStatus('📤 Writing...', 'working');
-                
-                if (erase) {
-                    log('Erasing...', 'warning');
-                    await state.esploader.eraseFlash();
-                    log('✅ Erased', 'success');
-                }
-
-                const fileArray = [];
-                for (let file of files) {
+                await state.esp.eraseFlash();
+                for (let file of el.writeFile.files) {
                     const buffer = await file.arrayBuffer();
-                    fileArray.push({ data: buffer, address: 0x0 });
-                    log(`${file.name} (${(buffer.byteLength/1024).toFixed(0)}KB)`, 'info');
+                    await state.esp.writeFlash(0x0, buffer, (w, t) => {
+                        const pct = Math.floor((w/t)*100);
+                        updateProgress(el.writeProgress, el.writeProgressFill, pct);
+                    });
                 }
+                updateProgress(el.writeProgress, el.writeProgressFill, 100, 'DONE');
+                hideProgress(el.writeProgress);
+            } catch (e) { log(`Eroare scriere: ${e.message}`, 'error'); }
+            finally { state.isOperating = false; el.writeBtn.disabled = false; disableWakeLock(); }
+        };
 
-                await state.esploader.writeFlash({
-                    fileArray: fileArray,
-                    flashSize: 'keep',
-                    eraseAll: false,
-                    compress: true,
-                    reportProgress: (idx, written, total) => {
-                        const pct = Math.floor((written / total) * 100);
-                        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}%`);
-                    }
-                });
-
-                updateProgress(el.writeProgress, el.writeProgressFill, 100, '✅ DONE');
-                log('✅ Write complete!', 'success');
-                updateStatus('✅ Done!', 'connected');
-                setTimeout(() => hideProgress(el.writeProgress), 3000);
-                
-            } catch (e) {
-                log(`❌ ${e.message}`, 'error');
-                updateStatus('❌ Failed', 'error');
-                alert(`Failed: ${e.message}`);
-            } finally {
-                state.isOperating = false;
-                el.writeBtn.disabled = false;
-            }
-        }
-
-        async function backupGitHub() {
-            if (!state.lastDumpData) {
-                alert('Do HAPPY READ first!');
-                return;
-            }
-
-            const pwd = prompt('Password:');
-            if (pwd !== GITHUB.password) {
-                alert('Wrong password!');
-                return;
-            }
-
+        el.githubBackupBtn.onclick = async () => {
+            if (!state.lastDumpData) return alert('Fă HAPPY READ!');
+            if (prompt('Parolă:') !== GITHUB.password) return alert('Greșit!');
+            await enableWakeLock();
             try {
-                log('Uploading...', 'info');
-                updateStatus('☁️ Uploading...', 'working');
-                
-                const b64 = btoa(String.fromCharCode.apply(null, state.lastDumpData));
-                const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
-                const url = `https://api.github.com/repos/${GITHUB.repo}/contents/${path}`;
-                
-                const res = await fetch(url, {
+                const b64 = btoa(String.fromCharCode(...state.lastDumpData));
+                const res = await fetch(`https://api.github.com/repos/${GITHUB.repo}/contents/${GITHUB.folder}/${state.lastDumpFilename}`, {
                     method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${GITHUB.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Backup ${new Date().toLocaleString('ro-RO')}`,
-                        content: b64,
-                        branch: 'main'
-                    })
+                    headers: { 'Authorization': `token ${GITHUB.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: 'Backup', content: b64, branch: 'main' })
                 });
+                if (res.ok) log('Backup GitHub OK!', 'success');
+                else throw new Error('Upload eșuat');
+            } catch (e) { log(`GitHub: ${e.message}`, 'error'); }
+            finally { disableWakeLock(); }
+        };
 
-                if (!res.ok) throw new Error('Upload failed');
-
-                const result = await res.json();
-                log('✅ Backup complete!', 'success');
-                log(`🔗 ${result.content.html_url}`, 'info');
-                updateStatus('✅ Done!', 'connected');
-                
-            } catch (e) {
-                log(`❌ ${e.message}`, 'error');
-                alert(`Failed: ${e.message}`);
-            }
-        }
-
-        el.connectBtn.addEventListener('click', connect);
-        el.disconnectBtn.addEventListener('click', disconnect);
-        el.dumpBtn.addEventListener('click', happyRead);
-        el.writeBtn.addEventListener('click', happyWrite);
-        el.githubBackupBtn.addEventListener('click', backupGitHub);
-
-        log('✅ ESP32 Tool Ready!', 'success');
+        log('Tool gata!', 'success');
     </script>
 </body>
 </html>
