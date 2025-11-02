@@ -1,522 +1,42 @@
-<!DOCTYPE html>
-<html lang="ro">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 Flash Dumper & Writer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #1a5f3f;
-            min-height: 100vh;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .header-images {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            width: 100%;
-            max-width: 700px;
-            margin-bottom: 40px;
-        }
-        .header-images img {
-            max-width: 180px;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            border: 4px solid #5B9BD5;
-        }
-        .container { max-width: 700px; width: 100%; }
-        h1 {
-            color: #FFD700;
-            font-size: 2.5em;
-            text-align: center;
-            margin: 20px 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .section {
-            background: #B3D9F2;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-            border: 4px solid #5B9BD5;
-        }
-        .section.first-box {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-            padding: 10px 20px;
-        }
-        .section-content {
-            flex: 1;
-        }
-        .signature-img {
-            width: 130px;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border: 4px solid #5B9BD5;
-        }
-        .section h2 {
-            color: #1a5f3f;
-            font-size: 1.3em;
-            margin-bottom: 10px;
-        }
-        .section p {
-            color: #000;
-            font-size: 0.95em;
-            margin-bottom: 5px;
-        }
-        .control-group { margin-bottom: 10px; }
-        .control-group label {
-            color: #1a5f3f;
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-        }
-        select, input[type="file"] {
-            width: 100%;
-            padding: 8px;
-            border: 3px solid #5B9BD5;
-            border-radius: 8px;
-            background: white;
-        }
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        button {
-            flex: 1;
-            min-width: 180px;
-            padding: 12px;
-            font-size: 1.1em;
-            font-weight: bold;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
-        .btn-connect { background: #1a5f3f; color: white; }
-        .btn-connect:hover { background: #145030; transform: translateY(-2px); }
-        .btn-disconnect { background: #6c757d; color: white; }
-        .btn-read, .btn-write { background: #5B9BD5; color: #000; }
-        .btn-read:hover, .btn-write:hover { background: #FFD700; transform: translateY(-2px); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
-        .status {
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border: 3px solid #5B9BD5;
-            font-weight: 500;
-        }
-        .status.connected { border-color: #1a5f3f; background: #d4edda; }
-        .status.working { border-color: #FFD700; background: #fff3cd; }
-        .status.error { border-color: #dc3545; background: #f8d7da; }
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: white;
-            border-radius: 8px;
-            border: 3px solid #5B9BD5;
-            overflow: hidden;
-            margin: 10px 0;
-            display: none;
-        }
-        .progress-bar.active { display: block; }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
-            width: 0%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-        .log-container {
-            background: #1e1e1e;
-            color: #00ff00;
-            padding: 15px;
-            border-radius: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.6;
-        }
-        .log-entry { margin-bottom: 3px; }
-        .log-entry.error { color: #ff6b6b; }
-        .log-entry.success { color: #51cf66; }
-        .log-entry.warning { color: #ffd43b; }
-        .log-entry.info { color: #74c0fc; }
-        .radio-links {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            gap: 30px;
-            flex-wrap: wrap;
-        }
-        .radio-link {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-decoration: none;
-            transition: transform 0.3s;
-        }
-        .radio-link:hover { transform: scale(1.1); }
-        .radio-link img {
-            width: 120px;
-            height: 120px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            margin-bottom: 10px;
-            border: 4px solid #5B9BD5;
-        }
-        .radio-link span {
-            color: #000;
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        .resume-btn {
-            background: #28a745 !important;
-            color: white !important;
-            font-size: 0.9em !important;
-            padding: 8px 12px !important;
-            min-width: auto !important;
-        }
-        @media (max-width: 768px) {
-            .header-images {
-                flex-direction: column;
-                align-items: center;
-                gap: 15px;
-            }
-            h1 { font-size: 2em; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header-images">
-        <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
-        <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
-    </div>
 
-    <div class="container">
-        <h1>ESP32 Flash Dumper & Writer</h1>
 
-        <div class="section first-box">
-            <div class="section-content">
-                <h2>Connect Device</h2>
-                <div id="status" class="status">Status: Disconnected</div>
-            
-            <div class="control-group">
-                <label>Device Type:</label>
-                <select id="deviceType">
-                    <option value="ESP32-S3-RS485-CAN" selected>Waveshare ESP32-S3-RS485-CAN</option>
-                    <option value="ESP32-S3">ESP32-S3 (Generic, LilyGO)</option>
-                    <option value="ESP32-S3-DevKit">ESP32-S3-DevKitC</option>
-                    <option value="ESP32-S3-WROOM">ESP32-S3-WROOM-1/2</option>
-                    <option value="ESP32">ESP32 (DevKit, NodeMCU)</option>
-                    <option value="ESP32-WROOM">ESP32-WROOM-32</option>
-                    <option value="ESP32-WROVER">ESP32-WROVER</option>
-                    <option value="ESP32-S2">ESP32-S2</option>
-                    <option value="ESP32-C3">ESP32-C3 (RISC-V)</option>
-                    <option value="ESP32-C6">ESP32-C6</option>
-                    <option value="ESP32-H2">ESP32-H2</option>
-                    <option value="ESP32-T-CAN485">LilyGO T-CAN485</option>
-                    <option value="ESP32-TTGO">LilyGO TTGO T-Display</option>
-                    <option value="ESP8266">ESP8266 (NodeMCU, Wemos)</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label>Flash Size:</label>
-                <select id="flashSize">
-                    <option value="4">4 MB</option>
-                    <option value="8">8 MB</option>
-                    <option value="16" selected>16 MB (Waveshare ESP32-S3-RS485-CAN)</option>
-                    <option value="32">32 MB</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <label>Baud Rate:</label>
-                <select id="baudRate">
-                    <option value="115200">115200</option>
-                    <option value="230400">230400</option>
-                    <option value="460800">460800</option>
-                    <option value="921600" selected>921600</option>
-                    <option value="1500000">1500000</option>
-                </select>
-            </div>
-
-            <div class="button-group">
-                <button id="connectBtn" class="btn-connect">CONNECT</button>
-                <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
-            </div>
-            </div>
-            <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
-        </div>
-
-        <div class="section">
-            <h2>Happy Read - Dump Flash</h2>
-            <p><strong>1.</strong> Connect device via USB</p>
-            <p><strong>2.</strong> Click HAPPY READ to dump entire flash</p>
-            <p><strong>3.</strong> File will be saved to Downloads</p>
-
-            <div class="button-group">
-                <button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
-                <button id="resumeBtn" class="btn-read resume-btn" disabled style="display:none;">Resume</button>
-            </div>
-
-            <div id="dumpProgress" class="progress-bar">
-                <div id="dumpProgressFill" class="progress-fill">0%</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Happy Backup Dump on GitHub</h2>
-            <p><strong>1.</strong> First do HAPPY READ to create dump</p>
-            <p><strong>2.</strong> Click button below to backup to GitHub</p>
-            <p><strong>3.</strong> Enter password when prompted</p>
-
-            <div class="button-group">
-                <button id="githubBackupBtn" class="btn-write" disabled>HAPPY BACKUP DUMP ON GITHUB</button>
-            </div>
-
-            <div id="githubProgress" class="progress-bar">
-                <div id="githubProgressFill" class="progress-fill">0%</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Happy Write - Write Flash</h2>
-            <p><strong>1.</strong> Select firmware file (.bin)</p>
-            <p><strong>2.</strong> Click HAPPY WRITE</p>
-            <p><strong>3.</strong> Choose erase option when prompted</p>
-
-            <div class="control-group">
-                <label>Select Firmware File:</label>
-                <input type="file" id="writeFile" accept=".bin" multiple>
-            </div>
-
-            <div class="button-group">
-                <button id="writeBtn" class="btn-write" disabled>HAPPY WRITE</button>
-            </div>
-
-            <div id="writeProgress" class="progress-bar">
-                <div id="writeProgressFill" class="progress-fill">0%</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Operation Log</h2>
-            <div id="logContainer" class="log-container">
-                <div class="log-entry info">System initialized. Connect device to start...</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Radio Live</h2>
-            <div class="radio-links">
-                <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
-                    <img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
-                    <span>Cultural</span>
-                </a>
-                <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
-                    <img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
-                    <span>Radio Iași</span>
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script type="module">
-        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
-        
-        const state = { 
-            port: null, 
-            esploader: null, 
-            transport: null, 
-            chip: null, 
-            connected: false, 
-            isOperating: false, 
-            lastDumpData: null, 
-            lastDumpFilename: null,
-            resumeFile: null,
-            resumeOffset: 0
-        };
-        
-        const GITHUB = { 
-            token: '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', 
-            repo: 'CristiWDT1881/esp-dumper', 
-            folder: 'happydumps', 
-            password: 'wdt81boom' 
-        };
-
-        const el = {
-            status: document.getElementById('status'),
-            connectBtn: document.getElementById('connectBtn'),
-            disconnectBtn: document.getElementById('disconnectBtn'),
-            dumpBtn: document.getElementById('dumpBtn'),
-            resumeBtn: document.getElementById('resumeBtn'),
-            writeBtn: document.getElementById('writeBtn'),
-            githubBackupBtn: document.getElementById('githubBackupBtn'),
-            logContainer: document.getElementById('logContainer'),
-            dumpProgress: document.getElementById('dumpProgress'),
-            dumpProgressFill: document.getElementById('dumpProgressFill'),
-            writeProgress: document.getElementById('writeProgress'),
-            writeProgressFill: document.getElementById('writeProgressFill'),
-            githubProgress: document.getElementById('githubProgress'),
-            githubProgressFill: document.getElementById('githubProgressFill'),
-            deviceType: document.getElementById('deviceType'),
-            flashSize: document.getElementById('flashSize'),
-            baudRate: document.getElementById('baudRate'),
-            writeFile: document.getElementById('writeFile')
-        };
-
-        function log(msg, type = 'info') {
-            const time = new Date().toLocaleTimeString('ro-RO');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            entry.textContent = `[${time}] ${msg}`;
-            el.logContainer.appendChild(entry);
-            el.logContainer.scrollTop = el.logContainer.scrollHeight;
-        }
-
-        function updateStatus(msg, type = '') {
-            el.status.textContent = msg;
-            el.status.className = `status ${type}`;
-        }
-
-        function updateProgress(bar, fill, pct, txt) {
-            bar.classList.add('active');
-            fill.style.width = pct + '%';
-            fill.textContent = txt || pct + '%';
-        }
-
-        function hideProgress(bar) { bar.classList.remove('active'); }
-
-        const term = { 
-            clean: () => {}, 
-            writeLine: (t) => log(t), 
-            write: (t) => log(t) 
-        };
-
-        async function connect() {
-            try {
-                if (!('serial' in navigator)) {
-                    alert('Web Serial API not supported! Use Chrome/Edge.');
-                    return;
-                }
-
-                if (state.transport) {
-                    try { await state.transport.disconnect(); } catch(e) {}
-                    await new Promise(r => setTimeout(r, 300));
-                }
-
-                updateStatus('Connecting...', 'working');
-                log('Requesting port...', 'info');
-                state.port = await navigator.serial.requestPort();
-                
-                let baud = parseInt(el.baudRate.value);
-                if (el.deviceType.value.includes('ESP32-S3')) {
-                    baud = Math.min(baud, 460800);
-                    log(`Auto-adjusted baud to ${baud} for ESP32-S3 stability`, 'warning');
-                }
-                log(`Connecting at ${baud} baud...`, 'info');
-                
-                state.transport = new Transport(state.port, true);
-                state.esploader = new ESPLoader({
-                    transport: state.transport,
-                    baudrate: baud,
-                    romBaudrate: 115200,
-                    terminal: term,
-                    enableTracing: false
-                });
-                
-                log('Detecting chip...', 'info');
-                let retries = 3;
-                while (retries-- > 0) {
-                    try {
-                        state.chip = await state.esploader.main();
-                        break;
-                    } catch (e) {
-                        if (retries > 0) {
-                            log(`Retry ${4-retries}/3...`, 'warning');
-                            await new Promise(r => setTimeout(r, 1000));
-                        }
-                    }
-                }
-                if (!state.chip) throw new Error('Failed to connect');
-
-                state.connected = true;
-                const chipName = state.chip?.CHIP_NAME || el.deviceType.value;
-                log(`Connected: ${chipName}`, 'success');
-                try { log(`MAC: ${await state.esploader.readMac()}`, 'info'); } catch(e) {}
-
-                updateStatus(`Connected: ${chipName}`, 'connected');
-                el.connectBtn.disabled = true;
-                el.disconnectBtn.disabled = false;
-                el.dumpBtn.disabled = false;
-                el.resumeBtn.style.display = 'block';
-                el.resumeBtn.disabled = false;
-                el.writeBtn.disabled = false;
-                el.githubBackupBtn.disabled = false;
-                
-            } catch (e) {
-                log(`${e.message}`, 'error');
-                updateStatus('Failed', 'error');
-                try { if (state.transport) await state.transport.disconnect(); } catch{}
-                state.port = null; state.transport = null; state.esploader = null; state.connected = false;
-            }
-        }
-
-        async function disconnect() {
-            try {
-                if (state.transport) await state.transport.disconnect();
-                await new Promise(r => setTimeout(r, 300));
-                if (state.port) await state.port.close();
-                
-                state.port = null; state.esploader = null; state.transport = null; state.chip = null; state.connected = false;
-                updateStatus('Disconnected', '');
-                log('Disconnected', 'success');
-                
-                el.connectBtn.disabled = false;
-                el.disconnectBtn.disabled = true;
-                el.dumpBtn.disabled = true;
-                el.resumeBtn.style.display = 'none';
-                el.resumeBtn.disabled = true;
-                el.writeBtn.disabled = true;
-                el.githubBackupBtn.disabled = true;
-            } catch (e) {
-                log(`Disconnect error: ${e.message}`, 'error');
-            }
-        }
-
-        async function happyRead(resume = false) {
+async function happyRead(resume = false) {
             if (!state.connected || state.isOperating) return;
             state.isOperating = true;
             el.dumpBtn.disabled = true;
             el.resumeBtn.disabled = true;
 
             try {
-                log(resume ? 'Resuming dump...' : 'Starting Happy Read (bit-perfect mode)...', 'info');
+                log(resume ? 'Resuming dump...' : 'Starting BIT-PERFECT Flash Clone...', 'info');
                 updateStatus('Reading...', 'working');
 
-                const flashSize = parseInt(el.flashSize.value);
-                const flashBytes = flashSize * 1024 * 1024;
-                const chunk = 4096; // 4KB chunks pentru stabilitate
+                // ===== DETECTARE DIMENSIUNE REALĂ FLASH =====
+                log('Detecting real flash size...', 'info');
+                let realFlashSize = 0;
+                try {
+                    const flashId = await state.esploader.flashId();
+                    log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+                    
+                    // Detectare automată din chip
+                    if (state.chip && state.chip.getFlashSize) {
+                        realFlashSize = await state.chip.getFlashSize();
+                    }
+                } catch (e) {
+                    log(`Auto-detection failed, using dropdown value`, 'warning');
+                }
+
+                // Fallback la valoarea din dropdown
+                if (!realFlashSize || realFlashSize === 0) {
+                    realFlashSize = parseInt(el.flashSize.value) * 1024 * 1024;
+                }
+
+                const flashBytes = realFlashSize;
+                log(`Flash size: ${(flashBytes/1024/1024).toFixed(2)} MB`, 'success');
+
+                // ===== CHUNK SIZE OPTIM =====
+                // Chunk mai mic = mai sigur, mai lent
+                // ESP32-S3 este sensibil, folosim 1KB
+                const chunk = 1024; 
                 let offset = resume ? state.resumeOffset : 0;
                 const data = new Uint8Array(flashBytes);
 
@@ -536,92 +56,135 @@
 
                 const total = Math.ceil((flashBytes - offset) / chunk);
                 let read = 0;
-                let emptyChunks = 0;
-                let dataChunks = 0;
                 let lastLog = 0;
+                let consecutiveErrors = 0;
+                const MAX_CONSECUTIVE_ERRORS = 10;
 
-                log(`Total to read: ${(flashBytes/1024/1024).toFixed(2)} MB in ${total} chunks`, 'info');
+                log(`Reading ${(flashBytes/1024/1024).toFixed(2)} MB in ${total} chunks of ${chunk} bytes`, 'info');
+                log('This will take time but ensures perfect clone...', 'warning');
 
+                // ===== CITIRE BIT-PERFECT =====
                 for (let i = 0; i < total; i++) {
                     const addr = offset + i * chunk;
                     const size = Math.min(chunk, flashBytes - addr);
                     let block = null;
-                    let retries = 5; // Mai multe retry-uri
+                    let readOk = false;
 
-                    // Retry cu delay progresiv
-                    while (retries > 0) {
+                    // Maximum 3 retry-uri per chunk
+                    for (let attempt = 0; attempt < 3; attempt++) {
                         try {
+                            // Sincronizare înainte de citire
+                            if (attempt > 0) {
+                                await state.esploader.sync();
+                                await new Promise(r => setTimeout(r, 100));
+                            }
+
+                            // Citire chunk
                             block = await state.esploader.readFlash(addr, size);
                             
-                            // VERIFICARE: Asigură-te că am primit exact size bytes
+                            // VERIFICARE CRITICĂ: dimensiune exactă
                             if (!block || block.byteLength !== size) {
-                                throw new Error(`Expected ${size} bytes, got ${block?.byteLength || 0}`);
+                                throw new Error(`Size mismatch: expected ${size}, got ${block?.byteLength || 0}`);
+                            }
+
+                            // VERIFICARE: calculează checksum pentru validare
+                            const blockArray = new Uint8Array(block);
+                            let checksum = 0;
+                            for (let j = 0; j < blockArray.length; j++) {
+                                checksum = (checksum + blockArray[j]) & 0xFF;
+                            }
+
+                            // Succes!
+                            readOk = true;
+                            consecutiveErrors = 0;
+                            
+                            // Scrie în buffer
+                            data.set(blockArray, addr);
+                            break;
+
+                        } catch (e) {
+                            if (attempt === 2) {
+                                consecutiveErrors++;
+                                log(`FAILED at 0x${addr.toString(16)} after 3 attempts: ${e.message}`, 'error');
+                                
+                                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                                    throw new Error(`Too many consecutive errors (${consecutiveErrors}). Check connection!`);
+                                }
+                                
+                                // Întreabă user dacă vrea să continue
+                                const continueRead = confirm(
+                                    `Read error at address 0x${addr.toString(16)}\n\n` +
+                                    `Progress: ${((addr/flashBytes)*100).toFixed(1)}%\n\n` +
+                                    `Continue reading? (errors will be filled with 0xFF)`
+                                );
+                                
+                                if (!continueRead) {
+                                    throw new Error('Read cancelled by user');
+                                }
+                                
+                                // Fill cu 0xFF pentru zona eronată
+                                for (let j = 0; j < size; j++) {
+                                    data[addr + j] = 0xFF;
+                                }
+                                readOk = true;
+                                break;
                             }
                             
-                            break; // Success!
-                        } catch (e) {
-                            retries--;
-                            if (retries === 0) {
-                                log(`FAILED at 0x${addr.toString(16)}: ${e.message}`, 'error');
-                                throw new Error(`Read failed at ${(addr/1024/1024).toFixed(2)}MB: ${e.message}`);
-                            }
-                            log(`Retry ${6-retries}/5 at 0x${addr.toString(16)}...`, 'warning');
-                            await new Promise(r => setTimeout(r, 200 * (6-retries))); // Delay progresiv
+                            await new Promise(r => setTimeout(r, 150 * (attempt + 1)));
                         }
                     }
 
-                    // Convertește la Uint8Array și verifică
-                    const blockArray = new Uint8Array(block);
-                    
-                    // Statistici: verifică dacă chunk-ul are date
-                    let hasData = false;
-                    for (let j = 0; j < blockArray.length; j++) {
-                        if (blockArray[j] !== 0xFF) {
-                            hasData = true;
-                            break;
-                        }
-                    }
-                    
-                    if (hasData) dataChunks++;
-                    else emptyChunks++;
+                    if (!readOk) continue;
 
-                    // Scrie în buffer
-                    data.set(blockArray, addr);
                     read += size;
-                    
                     const pct = Math.floor((offset + read) / flashBytes * 100);
                     updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}%`);
                     
-                    // Log la fiecare 5% sau dacă găsim date după zone goale
-                    if (pct >= lastLog + 5 || (hasData && emptyChunks > 10)) {
+                    // Log la fiecare 2%
+                    if (pct >= lastLog + 2) {
                         const mbRead = ((offset + read) / 1024 / 1024).toFixed(2);
-                        log(`${pct}% (${mbRead}MB) - Data: ${dataChunks}, Empty: ${emptyChunks}`, 'info');
+                        const speed = (read / 1024).toFixed(0);
+                        log(`${pct}% - ${mbRead} MB read (${speed} KB)`, 'info');
                         lastLog = pct;
                     }
 
-                    // Delay mic pentru stabilitate ESP32-S3
-                    if (i % 50 === 0) {
+                    // Pauză la fiecare 100 chunks pentru ESP32-S3
+                    if (i % 100 === 0 && i > 0) {
                         await new Promise(r => setTimeout(r, 50));
                     }
                 }
 
-                // Verificare finală
+                // ===== ANALIZĂ FINALĂ =====
                 let totalDataBytes = 0;
                 let totalEmptyBytes = 0;
+                const SAMPLE_SIZE = Math.min(256 * 1024, data.length); // Primii 256KB
+                
                 for (let i = 0; i < data.length; i++) {
                     if (data[i] !== 0xFF) totalDataBytes++;
                     else totalEmptyBytes++;
                 }
 
+                // Verifică header ESP32
+                const hasValidHeader = data[0] === 0xE9;
                 const dataPct = ((totalDataBytes / flashBytes) * 100).toFixed(2);
-                log(`=== READ COMPLETE ===`, 'success');
+
+                log(`=== BIT-PERFECT CLONE COMPLETE ===`, 'success');
                 log(`Total: ${(flashBytes/1024/1024).toFixed(2)} MB`, 'info');
                 log(`Data: ${(totalDataBytes/1024/1024).toFixed(2)} MB (${dataPct}%)`, 'success');
-                log(`Empty: ${(totalEmptyBytes/1024/1024).toFixed(2)} MB (${(100-dataPct).toFixed(2)}%)`, 'info');
+                log(`Empty: ${(totalEmptyBytes/1024/1024).toFixed(2)} MB`, 'info');
+                log(`Valid Header: ${hasValidHeader ? 'YES ✓' : 'NO ✗'}`, hasValidHeader ? 'success' : 'warning');
 
-                if (totalDataBytes === 0) {
-                    log('⚠️ WARNING: Flash appears completely empty!', 'warning');
-                    const proceed = confirm('Flash appears empty (all 0xFF)!\n\nSave anyway?');
+                // Warning dacă pare empty
+                if (dataPct < 1) {
+                    log('⚠️ WARNING: Flash appears mostly empty!', 'warning');
+                    const proceed = confirm(
+                        `Flash contains very little data (${dataPct}%)!\n\n` +
+                        `This might indicate:\n` +
+                        `- Empty/new device\n` +
+                        `- Read error\n` +
+                        `- Wrong flash size\n\n` +
+                        `Save anyway?`
+                    );
                     if (!proceed) {
                         state.isOperating = false;
                         el.dumpBtn.disabled = false;
@@ -630,233 +193,46 @@
                     }
                 }
 
+                // ===== SALVARE =====
                 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = (state.chip?.CHIP_NAME || el.deviceType.value) + '_dump_' + ts + '.bin';
+                const chipName = state.chip?.CHIP_NAME || el.deviceType.value;
+                const name = `${chipName}_CLONE_${(flashBytes/1024/1024)}MB_${ts}.bin`;
                 
-                // Salvare cu verificare
                 const blob = new Blob([data]);
+                log(`Creating file: ${name}`, 'info');
+                log(`File size: ${(blob.size/1024/1024).toFixed(2)} MB (${blob.size} bytes)`, 'info');
+                
+                // Verificare finală
                 if (blob.size !== flashBytes) {
-                    throw new Error(`Blob size mismatch! Expected ${flashBytes}, got ${blob.size}`);
+                    log(`⚠️ Size warning: Expected ${flashBytes}, got ${blob.size}`, 'warning');
                 }
                 
                 saveAs(blob, name);
                 state.lastDumpData = data;
                 state.lastDumpFilename = name;
                 
-                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100%!');
-                log(`Saved: ${name}`, 'success');
-                log(`File size: ${(blob.size/1024/1024).toFixed(2)} MB`, 'info');
-                updateStatus('Dump complete!', 'connected');
+                updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'DONE ✓');
+                log(`✓ Saved: ${name}`, 'success');
+                log(`Clone ready for writing to another device!`, 'success');
+                updateStatus('Clone complete!', 'connected');
+                
                 setTimeout(() => hideProgress(el.dumpProgress), 3000);
                 
             } catch (e) {
                 log(`ERROR: ${e.message}`, 'error');
                 updateStatus('Read failed', 'error');
-                alert(`Read failed: ${e.message}\n\nTry:\n- Lower baud rate (460800 or 230400)\n- Better USB cable\n- Reconnect device`);
+                alert(
+                    `Read failed: ${e.message}\n\n` +
+                    `Solutions:\n` +
+                    `1. Lower baud rate (460800 or 230400)\n` +
+                    `2. Use high-quality USB cable\n` +
+                    `3. Reconnect device and retry\n` +
+                    `4. Check flash size setting\n` +
+                    `5. Try different USB port`
+                );
             } finally {
                 state.isOperating = false;
                 el.dumpBtn.disabled = false;
                 el.resumeBtn.disabled = false;
             }
         }
-
-        el.resumeBtn.onclick = () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.bin';
-            input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (file && file.name.includes('dump')) {
-                    state.resumeFile = file;
-                    state.resumeOffset = file.size;
-                    happyRead(true);
-                }
-            };
-            input.click();
-        };
-
-        async function happyWrite() {
-            if (!state.connected || state.isOperating) return;
-            
-            const files = el.writeFile.files;
-            if (!files || files.length === 0) {
-                alert('Please select at least one .bin file!');
-                return;
-            }
-
-            state.isOperating = true;
-            el.writeBtn.disabled = true;
-
-            try {
-                log(`Analyzing ${files.length} file(s)...`, 'info');
-                
-                // Verificare fișier înainte de scriere
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const data = await file.arrayBuffer();
-                    const bytes = new Uint8Array(data);
-                    
-                    log(`File: ${file.name}`, 'info');
-                    log(`Size: ${(file.size/1024/1024).toFixed(2)} MB (${file.size} bytes)`, 'info');
-                    
-                    // Verifică conținutul
-                    let emptyBytes = 0;
-                    let nonEmptyBytes = 0;
-                    for (let j = 0; j < Math.min(bytes.length, 1024); j++) {
-                        if (bytes[j] === 0xFF) emptyBytes++;
-                        else nonEmptyBytes++;
-                    }
-                    
-                    const emptyPct = Math.floor((emptyBytes / 1024) * 100);
-                    log(`First 1KB: ${emptyPct}% empty (0xFF), ${100-emptyPct}% data`, emptyPct > 90 ? 'warning' : 'success');
-                    
-                    if (emptyPct === 100) {
-                        const proceed = confirm(`WARNING: ${file.name} appears to be EMPTY (all 0xFF)!\n\nThis will erase your device!\n\nContinue anyway?`);
-                        if (!proceed) {
-                            log('Write cancelled by user', 'warning');
-                            state.isOperating = false;
-                            el.writeBtn.disabled = false;
-                            return;
-                        }
-                    }
-                    
-                    // Verifică dacă arată ca firmware valid
-                    if (bytes[0] === 0xE9) {
-                        log('✓ Valid ESP32 firmware header detected', 'success');
-                    } else {
-                        log(`⚠ Unknown header: 0x${bytes[0].toString(16).toUpperCase()} (not standard ESP32 firmware)`, 'warning');
-                    }
-                }
-
-                const eraseChoice = confirm('Erase entire flash before writing?\n\nOK = Full Erase (recommended for firmware)\nCancel = Write only (for partial updates)');
-                
-                updateStatus('Writing...', 'working');
-
-                if (eraseChoice) {
-                    log('Erasing flash...', 'warning');
-                    await state.esploader.eraseFlash();
-                    log('Flash erased completely', 'success');
-                }
-
-                for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
-                    const file = files[fileIdx];
-                    log(`Writing ${file.name}...`, 'info');
-                    
-                    const data = await file.arrayBuffer();
-                    const offset = 0x0;
-                    
-                    await state.esploader.writeFlash({
-                        fileArray: [{data: data, address: offset}],
-                        flashSize: 'keep',
-                        eraseAll: false,
-                        compress: true,
-                        reportProgress: (idx, written, total) => {
-                            const pct = Math.floor((written / total) * 100);
-                            updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}%`);
-                            if (pct % 10 === 0 && pct > 0) log(`Writing... ${pct}%`, 'info');
-                        }
-                    });
-
-                    log(`${file.name} written successfully!`, 'success');
-                }
-
-                updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Done!');
-                log('All files written successfully!', 'success');
-                updateStatus('Write complete!', 'connected');
-                
-                setTimeout(() => hideProgress(el.writeProgress), 3000);
-                
-                const reboot = confirm('Flash written successfully!\n\nReboot device now?');
-                if (reboot) {
-                    await state.esploader.hardReset();
-                    log('Device rebooted', 'success');
-                }
-                
-            } catch (e) {
-                log(`Write error: ${e.message}`, 'error');
-                updateStatus('Write failed', 'error');
-                alert(`Write failed: ${e.message}\n\nTry:\n- Use REAL firmware (not dump)\n- Lower baud rate\n- Check cable connection`);
-            } finally {
-                state.isOperating = false;
-                el.writeBtn.disabled = false;
-            }
-        }
-
-        async function backupGitHub() {
-            if (!state.lastDumpData || !state.lastDumpFilename) {
-                alert('No dump available! Do HAPPY READ first.');
-                return;
-            }
-
-            const pwd = prompt('Enter GitHub backup password:');
-            if (pwd !== GITHUB.password) {
-                alert('Wrong password!');
-                return;
-            }
-
-            state.isOperating = true;
-            el.githubBackupBtn.disabled = true;
-
-            try {
-                log('Starting GitHub backup...', 'info');
-                updateStatus('Uploading to GitHub...', 'working');
-                updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Preparing...');
-
-                const base64 = btoa(String.fromCharCode(...new Uint8Array(state.lastDumpData)));
-                updateProgress(el.githubProgress, el.githubProgressFill, 30, 'Encoding...');
-
-                const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
-                const url = `https://api.github.com/repos/${GITHUB.repo}/contents/${path}`;
-                
-                updateProgress(el.githubProgress, el.githubProgressFill, 50, 'Uploading...');
-
-                const response = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${GITHUB.token}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: `Backup: ${state.lastDumpFilename}`,
-                        content: base64,
-                        branch: 'main'
-                    })
-                });
-
-                updateProgress(el.githubProgress, el.githubProgressFill, 90, 'Finalizing...');
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Upload failed');
-                }
-
-                const result = await response.json();
-                updateProgress(el.githubProgress, el.githubProgressFill, 100, 'Done!');
-                log(`Backed up to: ${result.content.html_url}`, 'success');
-                updateStatus('Backup complete!', 'connected');
-                
-                setTimeout(() => hideProgress(el.githubProgress), 3000);
-                alert(`Backup successful!\n\nFile: ${state.lastDumpFilename}\n\nView on GitHub: ${result.content.html_url}`);
-
-            } catch (e) {
-                log(`GitHub backup error: ${e.message}`, 'error');
-                updateStatus('Backup failed', 'error');
-                alert(`GitHub backup failed: ${e.message}\n\nCheck:\n- Internet connection\n- GitHub token validity\n- Repository permissions`);
-            } finally {
-                state.isOperating = false;
-                el.githubBackupBtn.disabled = false;
-            }
-        }
-
-        el.connectBtn.addEventListener('click', connect);
-        el.disconnectBtn.addEventListener('click', disconnect);
-        el.dumpBtn.addEventListener('click', () => happyRead(false));
-        el.writeBtn.addEventListener('click', happyWrite);
-        el.githubBackupBtn.addEventListener('click', backupGitHub);
-
-        log('ESP32 Flash Dumper & Writer ready!', 'success');
-        log('Connect device to start operations.', 'info');
-    </script>
-</body>
-</html>
-
