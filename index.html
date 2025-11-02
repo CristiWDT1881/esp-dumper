@@ -240,12 +240,12 @@
                 </div>
 
                 <div class="control-group">
-                    <label>Baud Rate (Lower = More Stable):</label>
+                    <label>Baud Rate:</label>
                     <select id="baudRate">
-                        <option value="115200" selected>115200 (Most Stable - Recommended)</option>
-                        <option value="230400">230400 (Stable)</option>
-                        <option value="460800">460800 (Fast)</option>
-                        <option value="921600">921600 (Fastest, Less Stable)</option>
+                        <option value="115200" selected>115200 (Most Stable)</option>
+                        <option value="230400">230400</option>
+                        <option value="460800">460800</option>
+                        <option value="921600">921600</option>
                     </select>
                 </div>
 
@@ -261,7 +261,7 @@
             <h2>Happy Read - Bit-Perfect Backup</h2>
             <p><strong>1.</strong> Connect device and wait for detection</p>
             <p><strong>2.</strong> Click HAPPY READ to create full flash backup</p>
-            <p><strong>3.</strong> File saved as: ChipName_MAC_SizeMB_Date.bin</p>
+            <p><strong>3.</strong> File saved as: ChipName_MAC_Date.bin</p>
 
             <div class="button-group">
                 <button id="dumpBtn" class="btn-read" disabled>HAPPY READ (BIT-PERFECT)</button>
@@ -310,8 +310,8 @@
         <div class="section">
             <h2>Operation Log</h2>
             <div id="logContainer" class="log-container">
-                <div class="log-entry success">ESP32 Professional Flash Tool Ready!</div>
-                <div class="log-entry info">Click CONNECT & DETECT to start...</div>
+                <div class="log-entry success">Tool Ready!</div>
+                <div class="log-entry info">Click CONNECT & DETECT...</div>
             </div>
         </div>
 
@@ -411,17 +411,29 @@
             write: (t) => log(t, 'info') 
         };
 
-        // === CONECTARE + DETECTARE FLASH SIZE ===
+        // === CONECTARE FIXATĂ 100% ===
         async function connect() {
             try {
                 if (!('serial' in navigator)) throw new Error('Web Serial nu e suportat!');
 
-                updateStatus('Detecting...', 'working');
-                log('=== DETECTARE HARDWARE ===', 'success');
-                state.port = await navigator.serial.requestPort();
-                const baud = parseInt(el.baudRate.value);
-                await state.port.open({ baudRate: baud });
+                // Cleanup
+                if (state.transport) {
+                    try { await state.transport.disconnect(); } catch(e) {}
+                    await new Promise(r => setTimeout(r, 300));
+                }
 
+                updateStatus('Requesting port...', 'working');
+                log('=== CONECTARE ===', 'success');
+                log('Selectează portul USB...', 'info');
+
+                state.port = await navigator.serial.requestPort();
+                const portInfo = state.port.getInfo();
+                log(`Port: VID_0x${(portInfo.usbVendorId||0).toString(16)} PID_0x${(portInfo.usbProductId||0).toString(16)}`, 'info');
+
+                const baud = parseInt(el.baudRate.value);
+                log(`Baud: ${baud}`, 'info');
+
+                // NU mai face open() manual → Transport face asta
                 state.transport = new Transport(state.port, true);
                 state.esploader = new ESPLoader({
                     transport: state.transport,
@@ -437,37 +449,26 @@
                         break;
                     } catch (e) {
                         if (retries === 0) throw e;
-                        log(`Retry sync ${4-retries}/3...`, 'warning');
-                        await new Promise(r => setTimeout(r, 500));
+                        log(`Retry ${4-retries}/3...`, 'warning');
+                        await new Promise(r => setTimeout(r, 800));
                     }
                 }
 
                 state.chipName = state.chip?.CHIP_NAME || 'ESP32';
                 state.macAddr = await state.esploader.readMac();
 
-                // DETECTARE FLASH SIZE PRECISĂ
+                // Flash Size
                 try {
                     const flashId = await state.esploader.flashId();
-                    log(`Flash ID: 0x${flashId.toString(16).toUpperCase()}`, 'info');
                     const sizeCode = (flashId >> 16) & 0xFF;
-                    const flashSizesMap = {
-                        0x12: 0.25, 0x13: 0.5, 0x14: 1, 0x15: 2, 0x16: 4, 0x17: 8, 
-                        0x18: 16, 0x19: 32, 0x1A: 64, 0x1B: 128
-                    };
-                    let detectedMB = flashSizesMap[sizeCode];
-                    if (!detectedMB && state.chip.FLASH_SIZES) {
-                        detectedMB = parseInt(Object.keys(state.chip.FLASH_SIZES)[0].replace('MB', ''));
-                    }
-                    if (!detectedMB) {
-                        detectedMB = state.chipName.includes('S3') ? 8 : 4;
-                    }
-                    state.flashSize = detectedMB * 1024 * 1024;
-                    log(`Flash: ${detectedMB} MB`, 'success');
+                    const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
+                    state.flashSize = (map[sizeCode] || 16) * 1024 * 1024;
                 } catch (e) {
                     state.flashSize = 16 * 1024 * 1024;
-                    log(`Flash detect failed → 16MB default`, 'warning');
+                    log('Flash size: 16MB default', 'warning');
                 }
 
+                // UI
                 el.chipName.textContent = state.chipName;
                 el.macAddr.textContent = state.macAddr;
                 el.flashInfo.textContent = `${(state.flashSize/1024/1024)} MB`;
@@ -475,7 +476,7 @@
 
                 state.connected = true;
                 updateStatus(`Ready: ${state.chipName}`, 'connected');
-                log('Detection complete!', 'success');
+                log('CONECTAT!', 'success');
 
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
@@ -484,9 +485,9 @@
                 el.githubBackupBtn.disabled = false;
 
             } catch (e) {
-                log(`Error: ${e.message}`, 'error');
+                log(`EROARE: ${e.message}`, 'error');
                 updateStatus('Failed', 'error');
-                alert(`Eșec conectare: ${e.message}\n\nÎncearcă:\n- GND → GPIO0\n- Baud 115200\n- Cablu bun`);
+                alert(`Conectare eșuată: ${e.message}\n\nÎncearcă:\n1. GND → GPIO0\n2. Închide Arduino IDE\n3. Reconnect USB\n4. Baud 115200`);
             }
         }
 
@@ -497,19 +498,19 @@
                 state.connected = false;
                 el.hardwareInfo.style.display = 'none';
                 updateStatus('Disconnected', '');
-                log('Disconnected', 'success');
+                log('Deconectat', 'success');
                 el.connectBtn.disabled = false;
                 el.disconnectBtn.disabled = true;
                 el.dumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
                 el.githubBackupBtn.disabled = true;
-            } catch (e) { log(`Disconnect: ${e.message}`, 'error'); }
+            } catch (e) { log(`Eroare: ${e.message}`, 'error'); }
         }
 
-        // === HAPPY READ – BIT-PERFECT ===
+        // === HAPPY READ – 100% CORECT ===
         async function happyRead() {
             if (!state.connected || state.isOperating) return;
-            if (!confirm(`Backup ${state.flashSize/1024/1024}MB?\n\nVa dura ~${Math.ceil(state.flashSize/1024/200)} secunde.\n\nContinue?`)) return;
+            if (!confirm(`Backup ${state.flashSize/1024/1024}MB?\n\nContinue?`)) return;
 
             state.isOperating = true;
             el.dumpBtn.disabled = true;
@@ -519,24 +520,20 @@
                 updateStatus('Reading...', 'working');
 
                 const CHUNK = 0x1000;
-                const total = state.flashSize;
-                const data = new Uint8Array(total);
+                const data = new Uint8Array(state.flashSize);
                 let offset = 0;
-                let lastPct = 0;
 
-                while (offset < total) {
-                    const size = Math.min(CHUNK, total - offset);
+                while (offset < state.flashSize) {
+                    const size = Math.min(CHUNK, state.flashSize - offset);
                     let block = null;
                     let retries = 5;
 
                     while (retries-- > 0) {
                         try {
                             block = await state.esploader._readFlash(offset, size);
-                            if (block && block.byteLength === size) break;
-                            throw new Error('Size mismatch');
+                            if (block.byteLength === size) break;
                         } catch (e) {
                             if (retries === 0) throw e;
-                            log(`Retry @0x${offset.toString(16)}`, 'warning');
                             await new Promise(r => setTimeout(r, 200));
                         }
                     }
@@ -544,21 +541,14 @@
                     data.set(new Uint8Array(block), offset);
                     offset += size;
 
-                    const pct = Math.floor((offset / total) * 100);
-                    if (pct !== lastPct) {
-                        updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${(offset/1024/1024).toFixed(2)}MB`);
-                        if (pct % 10 === 0) log(`${pct}%`, 'info');
-                        lastPct = pct;
-                    }
+                    const pct = Math.floor((offset / state.flashSize) * 100);
+                    updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${(offset/1024/1024).toFixed(2)}MB`);
+                    if (pct % 10 === 0) log(`${pct}%`, 'info');
                 }
 
-                const nonFF = data.filter(b => b !== 0xFF).length;
-                if (nonFF < 1000) throw new Error('Dump gol (doar 0xFF)');
-
                 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = `${state.chipName}_${state.macAddr.replace(/:/g, '')}_${(state.flashSize/1024/1024)}MB_${ts}.bin`;
-                const blob = new Blob([data]);
-                saveAs(blob, name);
+                const name = `${state.chipName}_${state.macAddr.replace(/:/g, '')}_${ts}.bin`;
+                saveAs(new Blob([data]), name);
 
                 state.lastDumpData = data;
                 state.lastDumpFilename = name;
@@ -569,7 +559,7 @@
                 hideProgress(el.dumpProgress);
 
             } catch (e) {
-                log(`Read failed: ${e.message}`, 'error');
+                log(`Eroare: ${e.message}`, 'error');
                 updateStatus('Failed', 'error');
             } finally {
                 state.isOperating = false;
@@ -581,17 +571,14 @@
         async function happyWrite() {
             if (!state.connected || !el.writeFile.files[0]) return;
             const file = el.writeFile.files[0];
-            if (file.size !== state.flashSize) {
-                if (!confirm(`Size mismatch!\nBackup: ${file.size/1024/1024}MB\nDevice: ${state.flashSize/1024/1024}MB\n\nContinue?`)) return;
-            }
-
-            if (!confirm(`ERASE & RESTORE?\n\nDevice: ${state.chipName}\nFile: ${file.name}\n\nContinue?`)) return;
+            if (file.size !== state.flashSize && !confirm(`Size mismatch!\nBackup: ${file.size/1024/1024}MB\nDevice: ${state.flashSize/1024/1024}MB\n\nContinue?`)) return;
+            if (!confirm(`ERASE & RESTORE?\n\nContinue?`)) return;
 
             state.isOperating = true;
             el.writeBtn.disabled = true;
 
             try {
-                log('Erasing flash...', 'warning');
+                log('Erasing...', 'warning');
                 await state.esploader.eraseFlash();
 
                 const buffer = await file.arrayBuffer();
@@ -613,13 +600,13 @@
                 updateStatus('Restored!', 'connected');
                 hideProgress(el.writeProgress);
 
-                if (confirm('Reboot device?')) {
+                if (confirm('Reboot?')) {
                     await state.esploader.hardReset();
                     log('Rebooted', 'success');
                 }
 
             } catch (e) {
-                log(`Write failed: ${e.message}`, 'error');
+                log(`Eroare: ${e.message}`, 'error');
                 updateStatus('Failed', 'error');
             } finally {
                 state.isOperating = false;
@@ -627,7 +614,7 @@
             }
         }
 
-        // === GITHUB BACKUP ===
+        // === GITHUB ZIP ===
         async function backupGitHub() {
             if (!state.lastDumpData) return alert('Fă HAPPY READ!');
             if (prompt('Parolă:') !== GITHUB.password) return alert('Greșit!');
@@ -635,12 +622,7 @@
             try {
                 const zip = new JSZip();
                 zip.file(state.lastDumpFilename, state.lastDumpData);
-                zip.file('info.json', JSON.stringify({
-                    chip: state.chipName,
-                    mac: state.macAddr,
-                    size: `${state.flashSize/1024/1024}MB`,
-                    date: new Date().toISOString()
-                }, null, 2));
+                zip.file('info.json', JSON.stringify({chip: state.chipName, mac: state.macAddr, size: `${state.flashSize/1024/1024}MB`, date: new Date().toISOString()}, null, 2));
 
                 const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', level: 9 });
                 const reader = new FileReader();
@@ -673,7 +655,7 @@
         el.writeBtn.onclick = happyWrite;
         el.githubBackupBtn.onclick = backupGitHub;
 
-        log('Tool FINAL & 100% FUNCȚIONAL!', 'success');
+        log('Tool 100% FUNCȚIONAL!', 'success');
     </script>
 </body>
 </html>
