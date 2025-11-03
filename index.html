@@ -752,9 +752,15 @@
                 // Citește fișierul
                 log('Reading firmware file...', 'info');
                 const arrayBuffer = await file.arrayBuffer();
-                const firmwareData = new Uint8Array(arrayBuffer);
+                let firmwareData = new Uint8Array(arrayBuffer);
                 
                 log(`File loaded: ${(firmwareData.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
+                
+                // Dacă fișierul e mai mare decât flash, trunchiază
+                if (firmwareData.length > state.detectedFlashBytes) {
+                    log(`Truncating file to ${state.detectedFlashSize}MB...`, 'warning');
+                    firmwareData = firmwareData.slice(0, state.detectedFlashBytes);
+                }
                 
                 // Erase flash
                 log('====================================', 'warning');
@@ -770,9 +776,12 @@
                 log('Writing complete flash image from 0x0...', 'info');
                 log('💡 Device may automatically enter boot mode', 'info');
                 
+                // Convertim Uint8Array la string pentru esptool-js
+                const firmwareString = String.fromCharCode.apply(null, Array.from(firmwareData));
+                
                 await state.esploader.writeFlash({
                     fileArray: [{
-                        data: firmwareData,
+                        data: firmwareString,
                         address: 0x0
                     }],
                     flashSize: 'keep',
