@@ -720,11 +720,11 @@
                 log('Erasing flash (this may take 1-2 minutes)...','warning');
                 log('If device has BOOT button: hold BOOT, press RESET, release both','info');
                 updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
+                await state.esploader.eraseFl
                 await state.esploader.eraseFlash();
                 log('Flash erased','success');
                 log('====================================','info');
                 log('Converting binary to string (safe chunked method)...','info');
-                const CHUNK
                 const CHUNK_SIZE = 32768;
                 let firmwareString = '';
                 for(let i=0; i<firmwareData.length; i+=CHUNK_SIZE){
