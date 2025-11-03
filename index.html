@@ -219,7 +219,7 @@
 
         <div class="section first-box">
             <div class="section-content">
-                <h2>📡 Connect Device</h2>
+                <h2>Connect Device</h2>
                 <div id="status" class="status">Status: Disconnected</div>
             
                 <div id="deviceInfo" class="info-box" style="display: none;">
@@ -237,13 +237,13 @@
         </div>
 
         <div class="section">
-            <h2>📥 Happy Read - Dump Flash</h2>
+            <h2>Happy Read - Dump Flash</h2>
             <p><strong>1.</strong> Connect device via USB</p>
             <p><strong>2.</strong> Click HAPPY READ to dump entire flash (including bootloader)</p>
             <p><strong>3.</strong> Complete flash image will be saved to Downloads</p>
 
             <div class="button-group">
-                <button id="dumpBtn" class="btn-read" disabled>📥 HAPPY READ</button>
+                <button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
             </div>
 
             <div id="dumpProgress" class="progress-bar">
@@ -252,13 +252,13 @@
         </div>
 
         <div class="section">
-            <h2>☁️ Happy Backup Dump on GitHub</h2>
+            <h2>Happy Backup Dump on GitHub</h2>
             <p><strong>1.</strong> First do HAPPY READ to create dump</p>
             <p><strong>2.</strong> Click button below to backup to GitHub</p>
             <p><strong>3.</strong> Enter password when prompted</p>
 
             <div class="button-group">
-                <button id="githubBackupBtn" class="btn-write" disabled>☁️ HAPPY BACKUP DUMP ON GITHUB</button>
+                <button id="githubBackupBtn" class="btn-write" disabled>HAPPY BACKUP DUMP ON GITHUB</button>
             </div>
 
             <div id="githubProgress" class="progress-bar">
@@ -267,7 +267,7 @@
         </div>
 
         <div class="section">
-            <h2>📤 Happy Write - Write Flash</h2>
+            <h2>Happy Write - Write Flash</h2>
             <p><strong>1.</strong> Select firmware file (.bin) - full flash dump</p>
             <p><strong>2.</strong> Click HAPPY WRITE</p>
             <p><strong>3.</strong> System will verify compatibility (±25%) before writing</p>
@@ -278,7 +278,7 @@
             </div>
 
             <div class="button-group">
-                <button id="writeBtn" class="btn-write" disabled>📤 HAPPY WRITE</button>
+                <button id="writeBtn" class="btn-write" disabled>HAPPY WRITE</button>
             </div>
 
             <div id="writeProgress" class="progress-bar">
@@ -287,14 +287,14 @@
         </div>
 
         <div class="section">
-            <h2>📋 Operation Log</h2>
+            <h2>Operation Log</h2>
             <div id="logContainer" class="log-container">
                 <div class="log-entry info">System initialized. Connect device to start...</div>
             </div>
         </div>
 
         <div class="section">
-            <h2>📻 Radio Live</h2>
+            <h2>Radio Live</h2>
             <div class="radio-links">
                 <a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
                     <img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
@@ -402,7 +402,7 @@
                 state.detectedFlashSize = flashSizeMap[sizeCode] || 4;
                 state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
                 
-                log(`✅ Detected flash: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'success');
+                log(`Detected flash: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'success');
                 return true;
             } catch (e) {
                 log(`Warning: Could not detect flash size, assuming 4MB`, 'warning');
@@ -474,9 +474,8 @@
                 state.connected = true;
                 state.chipType = state.chip?.CHIP_NAME || 'ESP32';
                 
-                log(`✅ Connected: ${state.chipType}`, 'success');
+                log(`Connected: ${state.chipType}`, 'success');
                 
-                // Citește MAC cu conversie corectă
                 let macAddr = 'Unknown';
                 try {
                     const macBytes = await state.esploader.readMac();
@@ -492,16 +491,14 @@
                 }
                 state.macAddress = macAddr;
                 
-                // Detectează flash size
                 await detectFlashSize();
                 
-                // Update UI info
                 el.chipType.textContent = state.chipType;
                 el.flashSize.textContent = `${state.detectedFlashSize} MB`;
                 el.macAddress.textContent = macAddr;
                 el.deviceInfo.style.display = 'block';
                 
-                updateStatus(`✅ ${state.chipType} - ${state.detectedFlashSize}MB`, 'connected');
+                updateStatus(`${state.chipType} - ${state.detectedFlashSize}MB`, 'connected');
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
                 el.dumpBtn.disabled = false;
@@ -509,8 +506,8 @@
                 el.githubBackupBtn.disabled = false;
                 
             } catch (e) {
-                log(`❌ ${e.message}`, 'error');
-                updateStatus('❌ Failed', 'error');
+                log(`${e.message}`, 'error');
+                updateStatus('Failed', 'error');
                 
                 try {
                     if (state.transport) await state.transport.disconnect();
@@ -525,11 +522,11 @@
                 state.connected = false;
                 
                 if (e.message.includes('open') || e.message.includes('port')) {
-                    log('💡 Solutions:', 'warning');
-                    log('1️⃣ Close Arduino IDE/PlatformIO', 'info');
-                    log('2️⃣ Unplug and replug USB', 'info');
-                    log('3️⃣ Try another USB port', 'info');
-                    log('4️⃣ Restart browser', 'info');
+                    log('Solutions:', 'warning');
+                    log('1. Close Arduino IDE/PlatformIO', 'info');
+                    log('2. Unplug and replug USB', 'info');
+                    log('3. Try another USB port', 'info');
+                    log('4. Restart browser', 'info');
                 }
             }
         }
@@ -568,7 +565,7 @@
                 
                 el.deviceInfo.style.display = 'none';
                 updateStatus('Disconnected', '');
-                log('✅ Disconnected', 'success');
+                log('Disconnected', 'success');
                 
                 el.connectBtn.disabled = false;
                 el.disconnectBtn.disabled = true;
@@ -604,7 +601,7 @@
                 log('====================================', 'info');
                 log('Starting Happy Read...', 'info');
                 log('Reading COMPLETE flash image (including bootloader, partitions, everything)', 'info');
-                updateStatus('📥 Reading...', 'working');
+                updateStatus('Reading...', 'working');
 
                 log(`Reading ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes) from 0x0`, 'info');
                 
@@ -642,18 +639,18 @@
                 
                 updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '100% Complete!');
                 log('====================================', 'success');
-                log(`✅ Complete flash dump saved: ${filename}`, 'success');
-                log(`📦 Size: ${(data.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
-                log('💡 This is a FULL flash image - can be restored completely', 'info');
-                log('💡 Ready for GitHub backup', 'info');
+                log(`Complete flash dump saved: ${filename}`, 'success');
+                log(`Size: ${(data.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
+                log('This is a FULL flash image - can be restored completely', 'info');
+                log('Ready for GitHub backup', 'info');
                 log('====================================', 'info');
                 
-                updateStatus('✅ Read Complete!', 'connected');
+                updateStatus('Read Complete!', 'connected');
                 setTimeout(() => hideProgress(el.dumpProgress), 3000);
                 
             } catch (e) {
-                log(`❌ Error: ${e.message}`, 'error');
-                updateStatus('❌ Read Failed', 'error');
+                log(`Error: ${e.message}`, 'error');
+                updateStatus('Read Failed', 'error');
                 hideProgress(el.dumpProgress);
                 alert(`Read failed: ${e.message}`);
             } finally {
@@ -683,7 +680,6 @@
                 log('Starting Happy Write...', 'info');
                 log('Re-analyzing device...', 'info');
                 
-                // Re-detectează flash size pentru siguranță
                 await detectFlashSize();
                 
                 const fileSizeBytes = file.size;
@@ -694,7 +690,6 @@
                 log(`Flash available: ${state.detectedFlashBytes} bytes (${state.detectedFlashSize} MB)`, 'info');
                 log(`File backup: ${fileSizeBytes} bytes (${fileSizeMB} MB)`, 'info');
                 
-                // Calculăm limite ±25%
                 const minSize = Math.floor(state.detectedFlashBytes * 0.75);
                 const maxSize = Math.floor(state.detectedFlashBytes * 1.25);
                 
@@ -705,12 +700,11 @@
                 log(`Acceptable limit: ±25% (${minSize} - ${maxSize} bytes)`, 'info');
                 log('====================================', 'info');
                 
-                // Verificare compatibilitate
                 if (fileSizeBytes < minSize || fileSizeBytes > maxSize) {
-                    log(`❌ File does NOT fit within acceptable limits!`, 'error');
+                    log(`File does NOT fit within acceptable limits!`, 'error');
                     log(`   Difference is ${diffPercent}% (limit: ±25%)`, 'error');
                     alert(
-                        `❌ INCOMPATIBLE FILE!\n\n` +
+                        `INCOMPATIBLE FILE!\n\n` +
                         `File size: ${fileSizeMB} MB\n` +
                         `Flash size: ${state.detectedFlashSize} MB\n` +
                         `Difference: ${diffPercent}%\n\n` +
@@ -720,18 +714,17 @@
                     return;
                 }
                 
-                log(`✅ File fits within acceptable limits (±25%)`, 'success');
+                log(`File fits within acceptable limits (±25%)`, 'success');
                 
                 if (fileSizeBytes > state.detectedFlashBytes) {
-                    log(`⚠️ WARNING: File is larger than flash!`, 'warning');
+                    log(`WARNING: File is larger than flash!`, 'warning');
                     log(`   Will write only first ${state.detectedFlashBytes} bytes`, 'warning');
                 }
                 
                 log('====================================', 'info');
                 
-                // Confirmare utilizator
                 const confirm1 = confirm(
-                    `⚠️ COMPLETE FLASH WRITE\n\n` +
+                    `COMPLETE FLASH WRITE\n\n` +
                     `Device: ${state.chipType}\n` +
                     `Flash: ${state.detectedFlashSize} MB\n` +
                     `File: ${file.name} (${fileSizeMB} MB)\n` +
@@ -746,43 +739,35 @@
                 }
                 
                 log('User confirmed write operation', 'info');
-                log('⚠️ This will write the COMPLETE flash image', 'warning');
-                updateStatus('📤 Writing...', 'working');
+                log('This will write the COMPLETE flash image', 'warning');
+                updateStatus('Writing...', 'working');
                 
-                // Citește fișierul
                 log('Reading firmware file...', 'info');
                 const arrayBuffer = await file.arrayBuffer();
                 let firmwareData = new Uint8Array(arrayBuffer);
                 
                 log(`File loaded: ${(firmwareData.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
                 
-                // Dacă fișierul e mai mare decât flash, trunchiază
                 if (firmwareData.length > state.detectedFlashBytes) {
                     log(`Truncating file to ${state.detectedFlashSize}MB...`, 'warning');
                     firmwareData = firmwareData.slice(0, state.detectedFlashBytes);
                 }
                 
-                // Erase flash
                 log('====================================', 'warning');
                 log('Erasing flash (this may take 1-2 minutes)...', 'warning');
-                log('💡 If device has BOOT button: hold BOOT, press RESET, release both', 'info');
+                log('If device has BOOT button: hold BOOT, press RESET, release both', 'info');
                 updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
                 
                 await state.esploader.eraseFlash();
-                log('✅ Flash erased', 'success');
+                log('Flash erased', 'success');
                 
-                // Write flash from 0x0 (complete image)
                 log('====================================', 'info');
                 log('Writing complete flash image from 0x0...', 'info');
-                log('💡 Device may automatically enter boot mode', 'info');
+                log('Device may automatically enter boot mode', 'info');
                 
-                // Convertim Uint8Array la string pentru esptool-js veche
-                // Convertește în bucăți de 64KB, apoi le concatenează
-let firmwareString = '';
-for (let i = 0; i < firmwareData.length; i += chunkSize) {
-    const chunk = firmwareData.slice(i, Math.min(i + chunkSize, firmwareData.length));
-    firmwareString += String.fromCharCode.apply(null, chunk);
-}
+                // === REPARAȚIE: chunkSize definit aici ===
+                const chunkSize = 4096;
+                const firmwareString = String.fromCharCode.apply(null, Array.from(firmwareData));
                 
                 await state.esploader.writeFlash({
                     fileArray: [{
@@ -806,17 +791,17 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
                 
                 updateProgress(el.writeProgress, el.writeProgressFill, 100, '100% Complete!');
                 log('====================================', 'success');
-                log('✅ Flash write complete!', 'success');
-                log('🔄 Device will reset automatically', 'info');
-                log('💡 Unplug and replug device if needed', 'info');
+                log('Flash write complete!', 'success');
+                log('Device will reset automatically', 'info');
+                log('Unplug and replug device if needed', 'info');
                 log('====================================', 'info');
                 
-                updateStatus('✅ Write Complete!', 'connected');
+                updateStatus('Write Complete!', 'connected');
                 setTimeout(() => hideProgress(el.writeProgress), 3000);
                 
             } catch (e) {
-                log(`❌ Error: ${e.message}`, 'error');
-                updateStatus('❌ Write Failed', 'error');
+                log(`Error: ${e.message}`, 'error');
+                updateStatus('Write Failed', 'error');
                 hideProgress(el.writeProgress);
                 alert(`Write failed: ${e.message}\n\nDevice may need recovery!`);
             } finally {
@@ -835,7 +820,7 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
             
             const pwd = prompt('Enter password to backup to GitHub:');
             if (pwd !== GITHUB.password) { 
-                alert('❌ Wrong password!'); 
+                alert('Wrong password!'); 
                 return; 
             }
             
@@ -847,13 +832,12 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
                 
                 log('====================================', 'info');
                 log('Backing up to GitHub...', 'info');
-                updateStatus('☁️ Uploading...', 'working');
+                updateStatus('Uploading...', 'working');
                 
                 updateProgress(el.githubProgress, el.githubProgressFill, 20, 'Encoding...');
                 log('Encoding to Base64...', 'info');
                 
-                // Convert to base64 in chunks to avoid memory issues
-                const chunkSize = 1024 * 1024; // 1MB chunks
+                const chunkSize = 1024 * 1024;
                 let base64 = '';
                 for (let i = 0; i < state.lastDumpData.length; i += chunkSize) {
                     const chunk = state.lastDumpData.slice(i, i + chunkSize);
@@ -862,7 +846,7 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
                     updateProgress(el.githubProgress, el.githubProgressFill, pct, `Encoding ${pct}%...`);
                 }
                 
-                log('✅ Encoded', 'success');
+                log('Encoded', 'success');
                 updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
                 
                 const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
@@ -892,17 +876,17 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
                 
                 updateProgress(el.githubProgress, el.githubProgressFill, 100, '100% Complete!');
                 log('====================================', 'success');
-                log('✅ Backup complete!', 'success');
-                log(`🔗 URL: ${result.content.html_url}`, 'success');
-                log(`📦 Size: ${(state.lastDumpData.length / (1024 * 1024)).toFixed(2)} MB`, 'info');
+                log('Backup complete!', 'success');
+                log(`URL: ${result.content.html_url}`, 'success');
+                log(`Size: ${(state.lastDumpData.length / (1024 * 1024)).toFixed(2)} MB`, 'info');
                 log('====================================', 'info');
                 
-                updateStatus('✅ Backup Complete!', 'connected');
+                updateStatus('Backup Complete!', 'connected');
                 setTimeout(() => hideProgress(el.githubProgress), 3000);
                 
             } catch (e) {
-                log(`❌ GitHub backup error: ${e.message}`, 'error');
-                updateStatus('❌ Backup Failed', 'error');
+                log(`GitHub backup error: ${e.message}`, 'error');
+                updateStatus('Backup Failed', 'error');
                 hideProgress(el.githubProgress);
                 alert(`Backup failed: ${e.message}`);
             } finally {
@@ -913,17 +897,16 @@ for (let i = 0; i < firmwareData.length; i += chunkSize) {
             }
         }
 
-        // Event listeners
         el.connectBtn.addEventListener('click', connect);
         el.disconnectBtn.addEventListener('click', disconnect);
         el.dumpBtn.addEventListener('click', happyRead);
         el.writeBtn.addEventListener('click', happyWrite);
         el.githubBackupBtn.addEventListener('click', backupGitHub);
 
-        log('✅ ESP32 Flash Dumper & Writer ready', 'success');
-        log('📱 Click CONNECT to start', 'info');
-        log('🔧 Automatic flash detection enabled', 'info');
-        log('🛡️ Write protection: ±25% compatibility check', 'info');
+        log('ESP32 Flash Dumper & Writer ready', 'success');
+        log('Click CONNECT to start', 'info');
+        log('Automatic flash detection enabled', 'info');
+        log('Write protection: ±25% compatibility check', 'info');
     </script>
 </body>
 </html>
