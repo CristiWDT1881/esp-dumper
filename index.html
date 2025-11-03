@@ -67,19 +67,64 @@ import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.
 // original vars... (omitted here to save space)
 
 async function happyWrite() {
-    if (!state.connected || state.isOperating) return;
-    const file = el.writeFile.files[0];
-    if (!file) { alert('Select file!'); return; }
-    const expected = state.detectedFlashSize*1024*1024;
-    if(file.size!==expected && !confirm("Size mismatch. Continue?")) return;
-    if(!confirm("Full flash ERASE + WRITE. Continue?")) return;
-    try{
-        state.isOperating=true; el.dumpBtn.disabled=true; el.writeBtn.disabled=true; el.githubBackupBtn.disabled=true;
-        const buf = await file.arrayBuffer(); const data = new Uint8Array(buf);
-        await state.esploader.eraseFlash();
-        await state.esploader.writeFlash({fileArray:[{data:buf,address:0x0}],flashSize:'keep',eraseAll:false,compress:false,reportProgress:(i,w,t)=>{
-            let pct=Math.floor(w/t*100); updateProgress(el.writeProgress,el.writeProgressFill,pct,`${pct}%`);
-        }});
+            if (!state.connected || state.isOperating) return;
+            const file = el.writeFile.files[0];
+            if (!file) { alert('Select file!'); return; }
+
+            const fileSize = file.size;
+            const flashBytes = state.detectedFlashSize * 1024 * 1024;
+            if (fileSize !== flashBytes && !confirm(`⚠️ File size (${(fileSize/1024/1024).toFixed(2)}MB) != Flash size (${state.detectedFlashSize}MB). Continue?`)) return;
+            if (!confirm(`⚠️ FULL ERASE + WRITE ${state.detectedFlashSize}MB flash?`)) return;
+
+            try {
+                state.isOperating = true;
+                el.dumpBtn.disabled = true;
+                el.writeBtn.disabled = true;
+                el.githubBackupBtn.disabled = true;
+                updateStatus('📤 Writing...', 'working');
+                log('Reading firmware...', 'info');
+
+                const buf = await file.arrayBuffer();
+                const data = new Uint8Array(buf);
+                log(`Loaded ${(data.length/1024/1024).toFixed(2)}MB`, 'success');
+
+                log('Erasing flash...', 'warning');
+                updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
+                await state.esploader.eraseFlash();
+                log('✅ Flash erased', 'success');
+
+                log('Writing raw flash image @0x0...', 'info');
+                await state.esploader.writeFlash({
+                    fileArray:[{ data: buf, address: 0x0 }],
+                    flashSize: 'keep',
+                    eraseAll: false,
+                    compress: false,
+                    reportProgress:(i,w,t)=>{
+                        const pct = Math.floor(w/t*100);
+                        const mbW = (w/1024/1024).toFixed(2);
+                        const mbT = (t/1024/1024).toFixed(2);
+                        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}% - ${mbW}/${mbT}MB`);
+                        if(pct%10===0) log(`Writing: ${pct}% (${mbW}MB)`, 'info');
+                    }
+                });
+
+                updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Done');
+                log('✅ Flash write complete!', 'success');
+                updateStatus('✅ Write Complete!', 'connected');
+                setTimeout(()=>hideProgress(el.writeProgress),3000);
+
+            } catch(e) {
+                log(`❌ ${e.message}`, 'error');
+                updateStatus('❌ Write Failed', 'error');
+                hideProgress(el.writeProgress);
+                alert(e.message);
+            } finally {
+                state.isOperating = false;
+                el.dumpBtn.disabled = false;
+                el.writeBtn.disabled = false;
+                el.githubBackupBtn.disabled = false;
+            }
+        });
         updateStatus('✅ Write Complete!','connected');
     }catch(e){updateStatus('❌ Write Failed','error');alert(e.message);}finally{
         state.isOperating=false; el.dumpBtn.disabled=false; el.writeBtn.disabled=false; el.githubBackupBtn.disabled=false;
@@ -88,4 +133,3 @@ async function happyWrite() {
 </script>
 </body>
 </html>
-
