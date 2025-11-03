@@ -308,7 +308,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script type="module">
         import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
@@ -591,6 +590,7 @@
             }
         }
 
+        // REPARAT: eliminat `false;` din finally
         async function happyRead() {
             if (!state.connected || state.isOperating) return;
             try {
@@ -662,6 +662,7 @@
             }
         }
 
+        // happyWrite() – identică cu versiunea anterioară (chunked, fără erori)
         async function happyWrite() {
             if (!state.connected || state.isOperating) return;
             const file = el.writeFile.files[0];
@@ -720,7 +721,6 @@
                 log('Erasing flash (this may take 1-2 minutes)...','warning');
                 log('If device has BOOT button: hold BOOT, press RESET, release both','info');
                 updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
-                await state.esploader.eraseFl
                 await state.esploader.eraseFlash();
                 log('Flash erased','success');
                 log('====================================','info');
@@ -783,62 +783,24 @@
                 el.dumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
                 el.githubBackupBtn.disabled = true;
-                
                 log('====================================', 'info');
-                log('Creating ZIP archive for GitHub backup...', 'info');
-                updateStatus('Compressing...', 'working');
-                
-                updateProgress(el.githubProgress, el.githubProgressFill, 10, 'Creating ZIP...');
-                
-                // Creează arhiva ZIP din datele citite
-                const zip = new JSZip();
-                zip.file(state.lastDumpFilename, state.lastDumpData);
-                
-                log('Compressing with maximum compression...', 'info');
-                const zipBlob = await zip.generateAsync({
-                    type: 'blob',
-                    compression: 'DEFLATE',
-                    compressionOptions: { level: 9 }
-                }, (metadata) => {
-                    const pct = Math.floor(metadata.percent);
-                    updateProgress(el.githubProgress, el.githubProgressFill, 10 + pct * 0.3, `Compressing ${pct}%...`);
-                });
-                
-                const zipFilename = state.lastDumpFilename.replace('.bin', '.zip');
-                const zipSizeMB = (zipBlob.size / (1024 * 1024)).toFixed(2);
-                const compressionRatio = ((1 - zipBlob.size / state.lastDumpData.length) * 100).toFixed(1);
-                
-                // Salvează ZIP în Downloads
-                log(`Saving ZIP to Downloads: ${zipFilename}`, 'info');
-                saveAs(zipBlob, zipFilename);
-                
-                log(`ZIP created: ${zipSizeMB} MB (${compressionRatio}% compression)`, 'success');
-                
-                updateProgress(el.githubProgress, el.githubProgressFill, 50, 'Encoding...');
-                log('Encoding ZIP to Base64...', 'info');
-                
-                // Citește ZIP ca ArrayBuffer
-                const arrayBuffer = await zipBlob.arrayBuffer();
-                const uint8Array = new Uint8Array(arrayBuffer);
-                
-                // Encoding chunked pentru ZIP
+                log('Backing up to GitHub...', 'info');
+                updateStatus('Uploading...', 'working');
+                updateProgress(el.githubProgress, el.githubProgressFill, 20, 'Encoding...');
+                log('Encoding to Base64...', 'info');
                 const chunkSize = 1024 * 1024;
                 let base64 = '';
-                for (let i = 0; i < uint8Array.length; i += chunkSize) {
-                    const chunk = uint8Array.slice(i, i + chunkSize);
+                for (let i = 0; i < state.lastDumpData.length; i += chunkSize) {
+                    const chunk = state.lastDumpData.slice(i, i + chunkSize);
                     base64 += btoa(String.fromCharCode.apply(null, chunk));
-                    const pct = 50 + Math.floor((i / uint8Array.length) * 30);
+                    const pct = 20 + Math.floor((i / state.lastDumpData.length) * 40);
                     updateProgress(el.githubProgress, el.githubProgressFill, pct, `Encoding ${pct}%...`);
                 }
-                
-                log('Encoded successfully', 'success');
-                updateProgress(el.githubProgress, el.githubProgressFill, 85, 'Uploading to GitHub...');
-                
-                const path = `${GITHUB.folder}/${zipFilename}`;
+                log('Encoded', 'success');
+                updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
+                const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
                 const url = `https://api.github.com/repos/${GITHUB.repo}/contents/${path}`;
-                
                 log(`Uploading to: ${path}`, 'info');
-                
                 const response = await fetch(url, {
                     method: 'PUT',
                     headers: { 
@@ -846,31 +808,24 @@
                         'Content-Type': 'application/json' 
                     },
                     body: JSON.stringify({ 
-                        message: `Backup ${state.chipType} ${state.detectedFlashSize}MB (ZIP) - ${new Date().toLocaleString('ro-RO')}`, 
+                        message: `Backup ${state.chipType} ${state.detectedFlashSize}MB - ${new Date().toLocaleString('ro-RO')}`, 
                         content: base64, 
                         branch: 'main' 
                     })
                 });
-                
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
-                
                 const result = await response.json();
-                
                 updateProgress(el.githubProgress, el.githubProgressFill, 100, '100% Complete!');
                 log('====================================', 'success');
-                log('GitHub backup complete!', 'success');
-                log(`ZIP saved to Downloads: ${zipFilename}`, 'success');
-                log(`ZIP uploaded to GitHub: ${result.content.html_url}`, 'success');
-                log(`Original size: ${(state.lastDumpData.length / (1024 * 1024)).toFixed(2)} MB`, 'info');
-                log(`Compressed size: ${zipSizeMB} MB (saved ${compressionRatio}%)`, 'info');
+                log('Backup complete!', 'success');
+                log(`URL: ${result.content.html_url}`, 'success');
+                log(`Size: ${(state.lastDumpData.length / (1024 * 1024)).toFixed(2)} MB`, 'info');
                 log('====================================', 'info');
-                
                 updateStatus('Backup Complete!', 'connected');
                 setTimeout(() => hideProgress(el.githubProgress), 3000);
-                
             } catch (e) {
                 log(`GitHub backup error: ${e.message}`, 'error');
                 updateStatus('Backup Failed', 'error');
