@@ -590,6 +590,7 @@
             }
         }
 
+        // REPARAT: eliminat `false;` din finally
         async function happyRead() {
             if (!state.connected || state.isOperating) return;
             try {
@@ -656,168 +657,114 @@
             } finally {
                 state.isOperating = false;
                 el.dumpBtn.disabled = false;
-                false;
                 el.writeBtn.disabled = false;
                 el.githubBackupBtn.disabled = false;
             }
         }
 
-        // === FUNCȚIA CORECTATĂ: HAPPY WRITE (identică cu esptool.py din terminal) ===
+        // happyWrite() – identică cu versiunea anterioară (chunked, fără erori)
         async function happyWrite() {
             if (!state.connected || state.isOperating) return;
-            
             const file = el.writeFile.files[0];
-            if (!file) { 
-                alert('Please select a firmware file!'); 
-                return; 
-            }
-            
+            if (!file) { alert('Please select a firmware file!'); return; }
             try {
                 state.isOperating = true;
-                el.dumpBtn.disabled = true;
-                el.writeBtn.disabled = true;
-                el.githubBackupBtn.disabled = true;
-                
-                log('====================================', 'info');
-                log('Starting Happy Write...', 'info');
-                log('Re-analyzing device...', 'info');
-                
+                el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = true;
+                log('====================================','info');
+                log('Starting Happy Write...','info');
+                log('Re-analyzing device...','info');
                 await detectFlashSize();
-                
                 const fileSizeBytes = file.size;
-                const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(2);
-                
-                log(`====================================`, 'info');
-                log(`Verification:`, 'info');
-                log(`Flash available: ${state.detectedFlashBytes} bytes (${state.detectedFlashSize} MB)`, 'info');
-                log(`File backup: ${fileSizeBytes} bytes (${fileSizeMB} MB)`, 'info');
-                
-                const minSize = Math.floor(state.detectedFlashBytes * 0.75);
-                const maxSize = Math.floor(state.detectedFlashBytes * 1.25);
-                
+                const fileSizeMB = (fileSizeBytes/(1024*1024)).toFixed(2);
+                log('====================================','info');
+                log(`Verification:`,`info`);
+                log(`Flash available: ${state.detectedFlashBytes} bytes (${state.detectedFlashSize} MB)`,`info`);
+                log(`File backup: ${fileSizeBytes} bytes (${fileSizeMB} MB)`,`info`);
+                const minSize = Math.floor(state.detectedFlashBytes*0.75);
+                const maxSize = Math.floor(state.detectedFlashBytes*1.25);
                 const diff = Math.abs(fileSizeBytes - state.detectedFlashBytes);
-                const diffPercent = Math.floor((diff / state.detectedFlashBytes) * 100);
-                
-                log(`Difference: ${diffPercent}%`, 'info');
-                log(`Acceptable limit: ±25% (${minSize} - ${maxSize} bytes)`, 'info');
-                log('====================================', 'info');
-                
-                if (fileSizeBytes < minSize || fileSizeBytes > maxSize) {
-                    log(`File does NOT fit within acceptable limits!`, 'error');
-                    log(`   Difference is ${diffPercent}% (limit: ±25%)`, 'error');
-                    alert(
-                        `INCOMPATIBLE FILE!\n\n` +
-                        `File size: ${fileSizeMB} MB\n` +
-                        `Flash size: ${state.detectedFlashSize} MB\n` +
-                        `Difference: ${diffPercent}%\n\n` +
-                        `File must be within ±25% of flash size.\n\n` +
-                        `Operation cancelled for safety.`
-                    );
+                const diffPct = Math.floor((diff/state.detectedFlashBytes)*100);
+                log(`Difference: ${diffPct}%`,`info`);
+                log(`Acceptable limit: ±25% (${minSize} - ${maxSize} bytes)`,`info`);
+                log('====================================','info');
+                if(fileSizeBytes<minSize || fileSizeBytes>maxSize){
+                    log(`File does NOT fit within acceptable limits!`,`error`);
+                    alert(`INCOMPATIBLE FILE!\n\nFile size: ${fileSizeMB} MB\nFlash size: ${state.detectedFlashSize} MB\nDifference: ${diffPct}%\n\nFile must be within ±25% of flash size.\n\nOperation cancelled for safety.`);
                     return;
                 }
-                
-                log(`File fits within acceptable limits (±25%)`, 'success');
-                
-                if (fileSizeBytes > state.detectedFlashBytes) {
-                    log(`WARNING: File is larger than flash!`, 'warning');
-                    log(`   Will write only first ${state.detectedFlashBytes} bytes`, 'warning');
+                log(`File fits within acceptable limits (±25%)`,`success`);
+                if(fileSizeBytes>state.detectedFlashBytes){
+                    log(`WARNING: File is larger than flash!`,`warning`);
+                    log(`   Will write only first ${state.detectedFlashBytes} bytes`,`warning`);
                 }
-                
-                log('====================================', 'info');
-                
                 const confirm1 = confirm(
-                    `COMPLETE FLASH WRITE\n\n` +
-                    `Device: ${state.chipType}\n` +
-                    `Flash: ${state.detectedFlashSize} MB\n` +
-                    `File: ${file.name} (${fileSizeMB} MB)\n` +
-                    `Difference: ${diffPercent}%\n\n` +
-                    `This will ERASE and OVERWRITE the entire flash!\n\n` +
-                    `Continue?`
+                    `COMPLETE FLASH WRITE\n\n`+
+                    `Device: ${state.chipType}\n`+
+                    `Flash: ${state.detectedFlashSize} MB\n`+
+                    `File: ${file.name} (${fileSizeMB} MB)\n`+
+                    `Difference: ${diffPct}%\n\n`+
+                    `This will ERASE and OVERWRITE the entire flash!\n\nContinue?`
                 );
-                
-                if (!confirm1) {
-                    log('Operation cancelled by user', 'warning');
-                    return;
-                }
-                
-                log('User confirmed write operation', 'info');
-                log('This will write the COMPLETE flash image', 'warning');
-                updateStatus('Writing...', 'working');
-                
-                log('Reading firmware file...', 'info');
+                if(!confirm1){ log('Operation cancelled by user','warning'); return; }
+                log('User confirmed write operation','info');
+                log('This will write the COMPLETE flash image','warning');
+                updateStatus('Writing...','working');
+                log('Reading firmware file...','info');
                 const arrayBuffer = await file.arrayBuffer();
                 let firmwareData = new Uint8Array(arrayBuffer);
-                
-                log(`File loaded: ${(firmwareData.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
-                
-                if (firmwareData.length > state.detectedFlashBytes) {
-                    log(`Truncating file to ${state.detectedFlashSize}MB...`, 'warning');
+                log(`File loaded: ${(firmwareData.length/(1024*1024)).toFixed(2)} MB`,`success`);
+                if(firmwareData.length > state.detectedFlashBytes){
+                    log(`Truncating file to ${state.detectedFlashSize}MB...`,`warning`);
                     firmwareData = firmwareData.slice(0, state.detectedFlashBytes);
                 }
-                
-                log('====================================', 'warning');
-                log('Erasing flash (this may take 1-2 minutes)...', 'warning');
-                log('If device has BOOT button: hold BOOT, press RESET, release both', 'info');
+                log('====================================','warning');
+                log('Erasing flash (this may take 1-2 minutes)...','warning');
+                log('If device has BOOT button: hold BOOT, press RESET, release both','info');
                 updateProgress(el.writeProgress, el.writeProgressFill, 0, 'Erasing...');
-                
                 await state.esploader.eraseFlash();
-                log('Flash erased', 'success');
-                
-                log('====================================', 'info');
-                log('Converting binary to string (safe chunked method)...', 'info');
-                
-                // Conversie sigură: chunked pentru a evita stack overflow
-                const CHUNK_SIZE = 32768; // 32KB
+                log('Flash erased','success');
+                log('====================================','info');
+                log('Converting binary to string (safe chunked method)...','info');
+                const CHUNK_SIZE = 32768;
                 let firmwareString = '';
-                for (let i = 0; i < firmwareData.length; i += CHUNK_SIZE) {
-                    const chunk = firmwareData.slice(i, i + CHUNK_SIZE);
+                for(let i=0; i<firmwareData.length; i+=CHUNK_SIZE){
+                    const chunk = firmwareData.slice(i, i+CHUNK_SIZE);
                     firmwareString += String.fromCharCode.apply(null, chunk);
                 }
-                log('Conversion complete', 'success');
-                
-                log('Writing complete flash image from 0x0...', 'info');
-                log('Device may automatically enter boot mode', 'info');
-                
+                log('Conversion complete','success');
+                log('Writing complete flash image from 0x0...','info');
+                log('Device may automatically enter boot mode','info');
                 await state.esploader.writeFlash({
-                    fileArray: [{
-                        data: firmwareString,
-                        address: 0x0
-                    }],
+                    fileArray: [{ data: firmwareString, address: 0x0 }],
                     flashSize: 'keep',
                     eraseAll: false,
                     compress: true,
-                    reportProgress: (fileIndex, written, total) => {
-                        const pct = Math.floor((written / total) * 100);
-                        const mbWritten = (written / (1024 * 1024)).toFixed(2);
-                        const mbTotal = (total / (1024 * 1024)).toFixed(2);
-                        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}% - ${mbWritten}/${mbTotal}MB`);
-                        
-                        if (pct % 10 === 0 && pct > 0) {
-                            log(`Writing: ${pct}% (${mbWritten}MB)`, 'info');
-                        }
+                    reportProgress: (fileIdx, written, total)=>{
+                        const pct = Math.floor((written/total)*100);
+                        const mbW = (written/(1024*1024)).toFixed(2);
+                        const mbT = (total/(1024*1024)).toFixed(2);
+                        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}% - ${mbW}/${mbT}MB`);
+                        if(pct%10===0 && pct>0) log(`Writing: ${pct}% (${mbW}MB)`,`info`);
                     }
                 });
-                
                 updateProgress(el.writeProgress, el.writeProgressFill, 100, '100% Complete!');
-                log('====================================', 'success');
-                log('Flash write complete!', 'success');
-                log('Device will reset automatically', 'info');
-                log('Unplug and replug device if needed', 'info');
-                log('====================================', 'info');
-                
-                updateStatus('Write Complete!', 'connected');
-                setTimeout(() => hideProgress(el.writeProgress), 3000);
-                
-            } catch (e) {
-                log(`Error: ${e.message}`, 'error');
-                updateStatus('Write Failed', 'error');
+                log('====================================','success');
+                log('Flash write complete!','success');
+                log('Device will reset automatically','info');
+                log('Unplug and replug device if needed','info');
+                log('====================================','info');
+                updateStatus('Write Complete!','connected');
+                setTimeout(()=>hideProgress(el.writeProgress),3000);
+            }
+            catch(e){
+                log(`Error: ${e.message}`,'error');
+                updateStatus('Write Failed','error');
                 hideProgress(el.writeProgress);
                 alert(`Write failed: ${e.message}\n\nDevice may need recovery!`);
-            } finally {
+            }
+            finally{
                 state.isOperating = false;
-                el.dumpBtn.disabled = false;
-                el.writeBtn.disabled = false;
-                el.githubBackupBtn.disabled = false;
+                el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = false;
             }
         }
 
@@ -826,26 +773,21 @@
                 alert('Please do HAPPY READ first!'); 
                 return; 
             }
-            
             const pwd = prompt('Enter password to backup to GitHub:');
             if (pwd !== GITHUB.password) { 
                 alert('Wrong password!'); 
                 return; 
             }
-            
             try {
                 state.isOperating = true;
                 el.dumpBtn.disabled = true;
                 el.writeBtn.disabled = true;
                 el.githubBackupBtn.disabled = true;
-                
                 log('====================================', 'info');
                 log('Backing up to GitHub...', 'info');
                 updateStatus('Uploading...', 'working');
-                
                 updateProgress(el.githubProgress, el.githubProgressFill, 20, 'Encoding...');
                 log('Encoding to Base64...', 'info');
-                
                 const chunkSize = 1024 * 1024;
                 let base64 = '';
                 for (let i = 0; i < state.lastDumpData.length; i += chunkSize) {
@@ -854,15 +796,11 @@
                     const pct = 20 + Math.floor((i / state.lastDumpData.length) * 40);
                     updateProgress(el.githubProgress, el.githubProgressFill, pct, `Encoding ${pct}%...`);
                 }
-                
                 log('Encoded', 'success');
                 updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
-                
                 const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
                 const url = `https://api.github.com/repos/${GITHUB.repo}/contents/${path}`;
-                
                 log(`Uploading to: ${path}`, 'info');
-                
                 const response = await fetch(url, {
                     method: 'PUT',
                     headers: { 
@@ -875,24 +813,19 @@
                         branch: 'main' 
                     })
                 });
-                
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.message || `HTTP ${response.status}`);
                 }
-                
                 const result = await response.json();
-                
                 updateProgress(el.githubProgress, el.githubProgressFill, 100, '100% Complete!');
                 log('====================================', 'success');
                 log('Backup complete!', 'success');
                 log(`URL: ${result.content.html_url}`, 'success');
                 log(`Size: ${(state.lastDumpData.length / (1024 * 1024)).toFixed(2)} MB`, 'info');
                 log('====================================', 'info');
-                
                 updateStatus('Backup Complete!', 'connected');
                 setTimeout(() => hideProgress(el.githubProgress), 3000);
-                
             } catch (e) {
                 log(`GitHub backup error: ${e.message}`, 'error');
                 updateStatus('Backup Failed', 'error');
