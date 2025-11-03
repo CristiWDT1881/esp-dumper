@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -306,6 +305,8 @@
             lastDumpFilename: null,
             detectedFlashSize: 16,
             detectedChipName: 'ESP32-S3',
+            flashManufacturer: 'Unknown',
+            flashType: 'Unknown',
             dumpOffset: 0,
             dumpError: false
         };
@@ -374,39 +375,161 @@
 
         async function detectFlashSize() {
             try {
-                logDetection('🔍 Detecting flash size...', 'info');
-                const flashId = await state.esploader.flashId();
-                logDetection(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+                logDetection('🔍 Reading Flash Chip Info...', 'info');
                 
-                const sizeMap = {
-                    0x15: 2, 0x16: 4, 0x17: 8, 0x18: 16, 0x19: 32
+                // ===== METODĂ 1: JEDEC Flash ID (Cel mai precis) =====
+                let flashId = 0;
+                try {
+                    flashId = await state.esploader.flashId();
+                    logDetection(`📌 Raw JEDEC ID: 0x${flashId.toString(16).toUpperCase().padStart(6, '0')}`, 'info');
+                } catch (e) {
+                    throw new Error(`Cannot read Flash ID: ${e.message}`);
+                }
+                
+                // Decodare JEDEC ID
+                const manufacturerId = flashId & 0xFF;
+                const memoryType = (flashId >> 8) & 0xFF;
+                const capacityId = (flashId >> 16) & 0xFF;
+                
+                // Database complet de producători
+                const manufacturers = {
+                    0xEF: 'Winbond', 
+                    0xC8: 'GigaDevice', 
+                    0x20: 'XMC (Wuhan Xinxin)', 
+                    0x68: 'Boya Microelectronics',
+                    0x85: 'Puya Semiconductor', 
+                    0xA1: 'Fudan Microelectronics',
+                    0x9D: 'ISSI',
+                    0xC2: 'Macronix',
+                    0x1C: 'EON',
+                    0xBF: 'SST (Microchip)',
+                    0x01: 'Spansion (Cypress)',
+                    0x1F: 'Atmel (Microchip)',
+                    0x37: 'AMIC',
+                    0x8C: 'Esmt',
+                    0x0B: 'XTX Technology'
                 };
                 
-                const sizeByte = (flashId >> 16) & 0xFF;
-                let detectedSize = sizeMap[sizeByte] || 16;
+                // Memory type identification
+                const memoryTypes = {
+                    0x40: 'Standard SPI',
+                    0x60: 'Quad SPI (QPI)',
+                    0x70: 'Octal SPI',
+                    0x20: 'XIP SPI'
+                };
                 
-                try {
-                    await state.esploader.readFlash(detectedSize * 1024 * 1024 - 4096, 1024);
-                    logDetection(`✅ Flash size confirmed: ${detectedSize} MB`, 'success');
-                } catch (e) {
-                    for (let testSize of [16, 8, 4, 2]) {
-                        try {
-                            await state.esploader.readFlash(testSize * 1024 * 1024 - 4096, 1024);
-                            detectedSize = testSize;
-                            logDetection(`✅ Flash size detected: ${testSize} MB`, 'success');
+                // Capacity mapping (standard JEDEC)
+                const capacityMap = {
+                    0x11: 0.125, 0x12: 0.25, 0x13: 0.5, 0x14: 1, 
+                    0x15: 2, 0x16: 4, 0x17: 8, 0x18: 16, 
+                    0x19: 32, 0x1A: 64, 0x1B: 128, 0x1C: 256
+                };
+                
+                const manufacturerName = manufacturers[manufacturerId] || `Unknown (0x${manufacturerId.toString(16)})`;
+                const memoryTypeName = memoryTypes[memoryType] || `Type 0x${memoryType.toString(16)}`;
+                const detectedSize = capacityMap[capacityId];
+                
+                logDetection(`🏭 Manufacturer: ${manufacturerName}`, 'success');
+                logDetection(`📡 Memory Type: ${memoryTypeName}`, 'info');
+                
+                if (detectedSize) {
+                    logDetection(`💾 Declared Capacity: ${detectedSize}MB (ID: 0x${capacityId.toString(16)})`, 'success');
+                } else {
+                    logDetection(`⚠️ Unknown Capacity ID: 0x${capacityId.toString(16)}`, 'warning');
+                }
+                
+                // ===== METODĂ 2: Chip Model Full Name =====
+                const chipName = state.chip?.CHIP_NAME || 'ESP32';
+                const chipFeatures = state.chip?.CHIP_FEATURES || [];
+                
+                logDetection(`🔧 Chip Model: ${chipName}`, 'success');
+                
+                if (chipFeatures.length > 0) {
+                    logDetection(`✨ Features: ${chipFeatures.join(', ')}`, 'info');
+                }
+                
+                // ===== METODĂ 3: Binary Test - Verificare Reală =====
+                logDetection('🧪 Verifying actual flash size...', 'info');
+                
+                let confirmedSize = 0;
+                const testSizes = [128, 64, 32, 16, 8, 4, 2, 1, 0.5, 0.25].filter(s => !detectedSize || s <= detectedSize * 2);
+                
+                for (let testSize of testSizes) {
+                    try {
+                        const testBytes = testSize * 1024 * 1024;
+                        const testAddr = testBytes - 4096; // Last sector
+                        
+                        const testData = await state.esploader.readFlash(testAddr, 256);
+                        const bytes = new Uint8Array(testData);
+                        
+                        // Check if readable
+                        confirmedSize = testSize;
+                        
+                        // Check if it has real data (not all 0xFF)
+                        const allFF = bytes.every(b => b === 0xFF);
+                        const allZero = bytes.every(b => b === 0x00);
+                        
+                        if (!allFF && !allZero) {
+                            logDetection(`  ✅ ${testSize}MB - Readable with data`, 'success');
                             break;
-                        } catch (e2) {
-                            continue;
+                        } else {
+                            logDetection(`  ⚪ ${testSize}MB - Readable (empty: ${allFF ? 'erased' : 'blank'})`, 'info');
+                            // Continue to check if larger size exists
                         }
+                    } catch (e) {
+                        logDetection(`  ❌ ${testSize}MB - Not accessible`, 'warning');
+                        break; // Stop at first failure
                     }
                 }
                 
-                state.detectedFlashSize = detectedSize;
-                return detectedSize;
+                // ===== DECIZIE FINALĂ =====
+                let finalSize;
+                
+                if (confirmedSize > 0) {
+                    finalSize = confirmedSize;
+                    
+                    if (detectedSize && Math.abs(confirmedSize - detectedSize) > 0.1) {
+                        logDetection(`⚠️ Size mismatch! JEDEC says ${detectedSize}MB, but verified ${confirmedSize}MB`, 'warning');
+                        logDetection(`📌 Using verified size: ${confirmedSize}MB`, 'success');
+                    } else {
+                        logDetection(`✅ Verified: ${confirmedSize}MB matches JEDEC specification`, 'success');
+                    }
+                } else if (detectedSize) {
+                    finalSize = detectedSize;
+                    logDetection(`✅ Using JEDEC specification: ${finalSize}MB`, 'success');
+                } else {
+                    // Fallback based on chip
+                    const chipDefaults = {
+                        'ESP32': 4, 'ESP32-S2': 4, 'ESP32-S3': 8,
+                        'ESP32-C3': 4, 'ESP32-C6': 4, 'ESP32-H2': 4
+                    };
+                    finalSize = chipDefaults[chipName] || 4;
+                    logDetection(`⚠️ Using default for ${chipName}: ${finalSize}MB`, 'warning');
+                }
+                
+                // ===== SUMMARY =====
+                logDetection('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                logDetection(`📦 FLASH CHIP DETECTED:`, 'success');
+                logDetection(`   Model: ${manufacturerName} Flash`, 'success');
+                logDetection(`   Chip: ${chipName}`, 'success');
+                logDetection(`   Size: ${finalSize}MB`, 'success');
+                logDetection(`   Type: ${memoryTypeName}`, 'success');
+                logDetection('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'info');
+                
+                state.detectedFlashSize = finalSize;
+                state.flashManufacturer = manufacturerName;
+                state.flashType = memoryTypeName;
+                
+                return finalSize;
+                
             } catch (e) {
-                logDetection(`⚠️ Flash detection failed, using 16MB default`, 'warning');
-                state.detectedFlashSize = 16;
-                return 16;
+                logDetection(`❌ Flash detection failed: ${e.message}`, 'error');
+                const fallback = 4;
+                logDetection(`⚠️ Using safe fallback: ${fallback}MB`, 'warning');
+                state.detectedFlashSize = fallback;
+                state.flashManufacturer = 'Unknown';
+                state.flashType = 'Unknown';
+                return fallback;
             }
         }
 
@@ -478,8 +601,14 @@
                 
                 const flashSize = await detectFlashSize();
                 
-                log(`✅ Connected: ${chipName} with ${flashSize}MB flash`, 'success');
-                updateStatus(`✅ ${chipName} - ${flashSize}MB`, 'connected');
+                log(`✅ CONNECTED SUCCESSFULLY!`, 'success');
+                log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+                log(`📦 Chip: ${chipName}`, 'info');
+                log(`💾 Flash: ${state.flashManufacturer} ${flashSize}MB ${state.flashType}`, 'info');
+                log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+                log(`🎯 Ready to dump ${flashSize}MB flash!`, 'success');
+                
+                updateStatus(`✅ ${chipName} | ${state.flashManufacturer} ${flashSize}MB`, 'connected');
                 
                 el.connectBtn.disabled = true;
                 el.disconnectBtn.disabled = false;
@@ -622,7 +751,8 @@
                 }
 
                 const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const name = state.detectedChipName + '_' + flashSize + 'MB_' + ts + '.bin';
+                const manufacturerShort = state.flashManufacturer.replace(/\s+/g, '').substring(0, 10);
+                const name = `${state.detectedChipName}_${manufacturerShort}_${flashSize}MB_${ts}.bin`;
                 const blob = new Blob([state.lastDumpData], {type: 'application/octet-stream'});
                 saveAs(blob, name);
                 state.lastDumpFilename = name;
@@ -630,6 +760,7 @@
                 
                 updateProgress(el.dumpProgress, el.dumpProgressFill, 100, '✅ Complete!');
                 log(`✅ Saved: ${name}`, 'success');
+                log(`📦 ${flashSize}MB dump from ${state.flashManufacturer} flash`, 'info');
                 log('💡 Ready for GitHub backup', 'info');
                 updateStatus('✅ Done!', 'connected');
                 
