@@ -745,8 +745,10 @@
                     return;
                 }
                 
-                log('User confirmed write operation', 'info');
+                log('
+                    log('User confirmed write operation', 'info');
                 log('⚠️ This will write the COMPLETE flash image', 'warning');
+                log('💡 DEBUG: Reading file into memory...', 'info');
                 updateStatus('📤 Writing...', 'working');
                 
                 // Citește fișierul
@@ -754,13 +756,33 @@
                 const arrayBuffer = await file.arrayBuffer();
                 let firmwareData = new Uint8Array(arrayBuffer);
                 
-                log(`File loaded: ${(firmwareData.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
+                log(`✅ File loaded: ${(firmwareData.length / (1024 * 1024)).toFixed(2)} MB`, 'success');
+                log(`💡 DEBUG: Uint8Array length: ${firmwareData.length}`, 'info');
                 
                 // Dacă fișierul e mai mare decât flash, trunchiază
                 if (firmwareData.length > state.detectedFlashBytes) {
                     log(`Truncating file to ${state.detectedFlashSize}MB...`, 'warning');
                     firmwareData = firmwareData.slice(0, state.detectedFlashBytes);
+                    log(`💡 DEBUG: Truncated to: ${firmwareData.length} bytes`, 'info');
                 }
+                
+                // Convertire Uint8Array → String ÎN CHUNK-URI (evită stack overflow)
+                log('💡 DEBUG: Converting to string in chunks...', 'info');
+                const conversionChunkSize = 65536; // 64KB chunks - safe pentru String.fromCharCode
+                let firmwareString = '';
+                
+                for (let i = 0; i < firmwareData.length; i += conversionChunkSize) {
+                    const chunk = firmwareData.slice(i, Math.min(i + conversionChunkSize, firmwareData.length));
+                    firmwareString += String.fromCharCode.apply(null, chunk);
+                    
+                    if (i % (conversionChunkSize * 10) === 0) {
+                        const pct = Math.floor((i / firmwareData.length) * 100);
+                        log(`💡 DEBUG: Conversion progress: ${pct}% (${(i / (1024*1024)).toFixed(2)}MB)`, 'info');
+                    }
+                }
+                
+                log(`✅ Conversion complete: ${firmwareString.length} chars`, 'success');
+                log(`💡 DEBUG: String type check: ${typeof firmwareString}`, 'info');
                 
                 // Erase flash
                 log('====================================', 'warning');
@@ -775,9 +797,7 @@
                 log('====================================', 'info');
                 log('Writing complete flash image from 0x0...', 'info');
                 log('💡 Device may automatically enter boot mode', 'info');
-                
-                // Convertim Uint8Array la string pentru esptool-js
-                const firmwareString = String.fromCharCode.apply(null, Array.from(firmwareData));
+                log(`💡 DEBUG: Calling writeFlash with ${firmwareString.length} chars...`, 'info');
                 
                 await state.esploader.writeFlash({
                     fileArray: [{
@@ -811,6 +831,7 @@
                 
             } catch (e) {
                 log(`❌ Error: ${e.message}`, 'error');
+                log(`💡 DEBUG: Error stack: ${e.stack}`, 'error');
                 updateStatus('❌ Write Failed', 'error');
                 hideProgress(el.writeProgress);
                 alert(`Write failed: ${e.message}\n\nDevice may need recovery!`);
