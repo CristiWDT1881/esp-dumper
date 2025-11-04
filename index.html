@@ -558,17 +558,19 @@ async function connect() {
     log(`Connected: ${state.chipType}`, 'success');
 
     let macAddr = 'Unknown';
-    try {
-      const macBytes = await state.esploader.readMac();
-      if (macBytes && macBytes.length >= 6) {
-        macAddr = Array.from(macBytes.slice(0, 6))
-          .map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-        state.macAddress = macAddr;
-        log(`MAC: ${macAddr}`, 'info');
-      }
-    } catch (e) {
-      log(`MAC read error: ${e.message}`, 'warning');
-    }
+try {
+  // Caută MAC-ul în output-ul esptool (ex: "MAC: 2c:bc:bb:a9:17:58")
+  const macMatch = term.lastOutput.match(/MAC:\s*([0-9a-fA-F:]{17})/i);
+  if (macMatch && macMatch[1]) {
+    macAddr = macMatch[1].toUpperCase();
+    state.macAddress = macAddr;
+    log(`MAC: ${macAddr}`, 'info');
+  } else {
+    log('MAC not found in output', 'warning');
+  }
+} catch (e) {
+  log(`MAC parse error: ${e.message}`, 'warning');
+}
 
     await detectFlashSize();
 
