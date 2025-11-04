@@ -228,6 +228,20 @@ h1 { font-size: 2em; }
 <strong>MAC Address:</strong> <span id="macAddress">-</span>
 </div>
 
+<div class="control-group">
+<label>Flash Size (MB):</label>
+<select id="flashSizeSelect">
+<option value="auto">Auto Detect</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="4">4</option>
+<option value="8">8</option>
+<option value="16">16</option>
+<option value="32">32</option>
+<option value="64">64</option>
+</select>
+</div>
+
 <div class="button-group">
 <button id="connectBtn" class="btn-connect">CONNECT</button>
 <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
@@ -324,7 +338,8 @@ const state = {
   detectedFlashSize: 0,
   detectedFlashBytes: 0,
   chipType: '',
-  macAddress: ''
+  macAddress: '',
+  flashSizeMode: 'auto'
 };
 
 const GITHUB = { 
@@ -352,7 +367,8 @@ const el = {
   deviceInfo: document.getElementById('deviceInfo'),
   chipType: document.getElementById('chipType'),
   flashSize: document.getElementById('flashSize'),
-  macAddress: document.getElementById('macAddress')
+  macAddress: document.getElementById('macAddress'),
+  flashSizeSelect: document.getElementById('flashSizeSelect')
 };
 
 function log(msg, type = 'info') {
@@ -402,11 +418,13 @@ async function detectFlashSize() {
     // METODĂ 1: Stub loader (cea mai de încredere pe ESP32-S3)
     try {
       const stubFlashSize = await state.esploader.getFlashSize();
-      if (stubFlashSize && stubFlashSize > 0) {
+      if (stubFlashSize && stubFlashSize > 1024 * 1024) { // Ignore if too small (buggy detection)
         state.detectedFlashSize = stubFlashSize / (1024 * 1024);
         state.detectedFlashBytes = stubFlashSize;
         log(`Detected from stub: ${state.detectedFlashSize} MB`, 'success');
         return true;
+      } else {
+        log('Stub flash size too small or invalid, skipping...', 'warning');
       }
     } catch (e) {
       log('Stub getFlashSize failed, trying output parsing...', 'info');
@@ -436,7 +454,7 @@ async function detectFlashSize() {
         log(`Manufacturer: 0x${manufacturer.toString(16).padStart(2, '0')}`, 'info');
         log(`Device: 0x${device.toString(16).padStart(4, '0')}`, 'info');
 
-        const sizeCode = (device >> 8) & 0xFF;
+        const sizeCode = device & 0xFF; // Corrected to low byte for capacity
         const flashSizeMap = {
           0x14: 1, 0x15: 2, 0x16: 4, 0x17: 8,
           0x18: 16, 0x19: 32, 0x1A: 64,
@@ -467,6 +485,29 @@ async function detectFlashSize() {
     state.detectedFlashBytes = 4 * 1024 * 1024;
     return false;
   }
+}
+
+function getEffectiveFlashBytes() {
+  if (state.flashSizeMode === 'auto') {
+    return state.detectedFlashBytes;
+  } else {
+    const manualSize = parseInt(state.flashSizeMode, 10);
+    return manualSize * 1024 * 1024;
+  }
+}
+
+function getEffectiveFlashSize() {
+  if (state.flashSizeMode === 'auto') {
+    return state.detectedFlashSize;
+  } else {
+    return parseInt(state.flashSizeMode, 10);
+  }
+}
+
+function updateFlashSizeDisplay() {
+  const effectiveSize = getEffectiveFlashSize();
+  const modeText = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
+  el.flashSize.textContent = `${effectiveSize} MB ${modeText}`;
 }
 
 // === RESTUL FUNCȚIILOR (connect, disconnect, happyRead, etc.) ===
@@ -535,11 +576,11 @@ async function connect() {
     await detectFlashSize();
 
     el.chipType.textContent = state.chipType;
-    el.flashSize.textContent = `${state.detectedFlashSize} MB`;
+    updateFlashSizeDisplay();
     el.macAddress.textContent = macAddr;
     el.deviceInfo.style.display = 'block';
 
-    updateStatus(`${state.chipType} - ${state.detectedFlashSize}MB`, 'connected');
+    updateStatus(`${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true;
     el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = false;
@@ -604,14 +645,15 @@ async function happyRead() {
     log('Starting Happy Read...', 'info');
     updateStatus('Reading...', 'working');
 
+    const effectiveBytes = getEffectiveFlashBytes();
     const chunkSize = 4096;
-    const totalChunks = Math.ceil(state.detectedFlashBytes / chunkSize);
-    const data = new Uint8Array(state.detectedFlashBytes);
+    const totalChunks = Math.ceil(effectiveBytes / chunkSize);
+    const data = new Uint8Array(effectiveBytes);
     let offset = 0;
 
     for (let i = 0; i < totalChunks; i++) {
       const addr = i * chunkSize;
-      const size = Math.min(chunkSize, state.detectedFlashBytes - offset);
+      const size = Math.min(chunkSize, effectiveBytes - offset);
       const block = await state.esploader.readFlash(addr, size);
       data.set(new Uint8Array(block), offset);
       offset += size;
@@ -621,13 +663,13 @@ async function happyRead() {
       updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}% - ${mbRead}MB`);
 
       if (i % Math.floor(totalChunks / 20) === 0) {
-        log(`Progress: ${pct}% (${mbRead}MB/${state.detectedFlashSize}MB)`, 'info');
+        log(`Progress: ${pct}% (${mbRead}MB/${getEffectiveFlashSize()}MB)`, 'info');
       }
     }
 
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const macShort = state.macAddress.replace(/:/g, '-').toLowerCase();
-    const filename = `${state.chipType}_${macShort}_${state.detectedFlashSize}MB_${ts}.bin`;
+    const filename = `${state.chipType}_${macShort}_${getEffectiveFlashSize()}MB_${ts}.bin`;
 
     const blob = new Blob([data], {type: 'application/octet-stream'});
     saveAs(blob, filename);
@@ -666,26 +708,27 @@ async function happyWrite() {
     log('Starting Happy Write...','info');
     await detectFlashSize();
 
+    const effectiveBytes = getEffectiveFlashBytes();
     const fileSizeBytes = file.size;
     const fileSizeMB = (fileSizeBytes/(1024*1024)).toFixed(2);
-    const minSize = Math.floor(state.detectedFlashBytes*0.75);
-    const maxSize = Math.floor(state.detectedFlashBytes*1.25);
-    const diffPct = Math.floor(Math.abs(fileSizeBytes - state.detectedFlashBytes)/state.detectedFlashBytes*100);
+    const minSize = Math.floor(effectiveBytes*0.75);
+    const maxSize = Math.floor(effectiveBytes*1.25);
+    const diffPct = Math.floor(Math.abs(fileSizeBytes - effectiveBytes)/effectiveBytes*100);
 
     if(fileSizeBytes<minSize || fileSizeBytes>maxSize){
       log(`File does NOT fit within ±25%`, 'error');
-      alert(`INCOMPATIBLE FILE!\n\nFile: ${fileSizeMB} MB\nFlash: ${state.detectedFlashSize} MB\nDifference: ${diffPct}%\n\nMust be within ±25%.`);
+      alert(`INCOMPATIBLE FILE!\n\nFile: ${fileSizeMB} MB\nFlash: ${getEffectiveFlashSize()} MB\nDifference: ${diffPct}%\n\nMust be within ±25%.`);
       return;
     }
 
-    const confirm1 = confirm(`WRITE FLASH\n\nDevice: ${state.chipType}\nFlash: ${state.detectedFlashSize} MB\nFile: ${file.name} (${fileSizeMB} MB)\n\nThis will ERASE and OVERWRITE entire flash!\n\nContinue?`);
+    const confirm1 = confirm(`WRITE FLASH\n\nDevice: ${state.chipType}\nFlash: ${getEffectiveFlashSize()} MB\nFile: ${file.name} (${fileSizeMB} MB)\n\nThis will ERASE and OVERWRITE entire flash!\n\nContinue?`);
     if(!confirm1) return;
 
     updateStatus('Writing...','working');
     const arrayBuffer = await file.arrayBuffer();
     let firmwareData = new Uint8Array(arrayBuffer);
-    if(firmwareData.length > state.detectedFlashBytes){
-      firmwareData = firmwareData.slice(0, state.detectedFlashBytes);
+    if(firmwareData.length > effectiveBytes){
+      firmwareData = firmwareData.slice(0, effectiveBytes);
     }
 
     log('Erasing flash...','warning');
@@ -755,7 +798,7 @@ async function backupGitHub() {
     const response = await fetch(url, {
       method: 'PUT',
       headers: { 'Authorization': `token ${GITHUB.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: `Backup ${state.chipType} ${state.detectedFlashSize}MB`, content: base64, branch: 'main' })
+      body: JSON.stringify({ message: `Backup ${state.chipType} ${getEffectiveFlashSize()}MB`, content: base64, branch: 'main' })
     });
 
     if (!response.ok) throw new Error((await response.json()).message || `HTTP ${response.status}`);
@@ -783,6 +826,13 @@ el.disconnectBtn.addEventListener('click', disconnect);
 el.dumpBtn.addEventListener('click', happyRead);
 el.writeBtn.addEventListener('click', happyWrite);
 el.githubBackupBtn.addEventListener('click', backupGitHub);
+el.flashSizeSelect.addEventListener('change', (e) => {
+  state.flashSizeMode = e.target.value;
+  if (state.connected) {
+    updateFlashSizeDisplay();
+    updateStatus(`${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
+  }
+});
 
 // Init
 log('ESP32 Flash Dumper & Writer ready', 'success');
