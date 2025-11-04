@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -396,7 +395,6 @@ function hideProgress(bar) {
   bar.classList.remove('active'); 
 }
 
-// === TERM MODIFICAT PENTRU CAPTURAREA OUTPUT-ULUI ===
 const term = { 
   lastOutput: '',
   clean: () => { term.lastOutput = ''; }, 
@@ -410,23 +408,21 @@ const term = {
   }
 };
 
-// === DETECTARE FLASH SIZE - VERSIUNE CORECTATĂ PENTRU KB/MB ===
 async function detectFlashSize() {
   try {
     log('Detecting flash size...', 'info');
     term.clean();
 
-    // METODĂ 1: Stub loader
     try {
       const stubFlashSize = await state.esploader.getFlashSize();
       if (stubFlashSize && stubFlashSize > 0) {
         let detectedMB;
 
         if (stubFlashSize < 1024 * 1024) {
-          detectedMB = stubFlashSize / 1024;  // KB → MB
+          detectedMB = stubFlashSize / 1024;
           log(`Stub returned ${stubFlashSize} KB → converted to ${detectedMB} MB`, 'info');
         } else {
-          detectedMB = stubFlashSize / (1024 * 1024);  // Byți → MB
+          detectedMB = stubFlashSize / (1024 * 1024);
         }
 
         state.detectedFlashSize = detectedMB;
@@ -438,7 +434,6 @@ async function detectFlashSize() {
       log('Stub getFlashSize failed, trying output parsing...', 'info');
     }
 
-    // METODĂ 2: Parsăm output-ul esptool
     const flashSizeMatch = term.lastOutput.match(/Detected flash size:\s*(\d+)MB/i);
     if (flashSizeMatch) {
       const sizeFromOutput = parseInt(flashSizeMatch[1], 10);
@@ -450,7 +445,6 @@ async function detectFlashSize() {
       }
     }
 
-    // METODĂ 3: Flash ID
     try {
       const flashId = await state.esploader.flashId();
       if (flashId === 0 || flashId === 0xFFFFFF || flashId === 0x000000) {
@@ -475,7 +469,6 @@ async function detectFlashSize() {
       log('FlashID not supported (normal for ESP32-S3)', 'info');
     }
 
-    // FALLBACK
     log('NO RELIABLE FLASH SIZE DETECTED!', 'warning');
     log('DEFAULTING TO 4MB - VERIFY MANUALLY!', 'warning');
     state.detectedFlashSize = 4;
@@ -490,7 +483,6 @@ async function detectFlashSize() {
   }
 }
 
-// === FUNCȚII DE MĂRIME EFECTIVĂ ===
 function getEffectiveFlashBytes() {
   if (state.flashSizeMode === 'auto') {
     return state.detectedFlashBytes;
@@ -514,7 +506,6 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${effectiveSize} MB ${modeText}`;
 }
 
-// === CONECTARE ===
 async function connect() {
   try {
     if (!('serial' in navigator)) {
@@ -572,16 +563,18 @@ async function connect() {
       if (macBytes && macBytes.length >= 6) {
         macAddr = Array.from(macBytes.slice(0, 6))
           .map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+        state.macAddress = macAddr;
         log(`MAC: ${macAddr}`, 'info');
       }
-    } catch (e) {}
-    state.macAddress = macAddr;
+    } catch (e) {
+      log(`MAC read error: ${e.message}`, 'warning');
+    }
 
     await detectFlashSize();
 
     el.chipType.textContent = state.chipType;
     updateFlashSizeDisplay();
-    el.macAddress.textContent = macAddr;
+    el.macAddress.textContent = state.macAddress;
     el.deviceInfo.style.display = 'block';
 
     updateStatus(`${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
@@ -639,7 +632,6 @@ async function disconnect() {
   }
 }
 
-// === HAPPY READ ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
@@ -702,7 +694,6 @@ async function happyRead() {
   }
 }
 
-// === HAPPY WRITE ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   const file = el.writeFile.files[0];
@@ -777,7 +768,6 @@ async function happyWrite() {
   }
 }
 
-// === GITHUB BACKUP ===
 async function backupGitHub() {
   if (!state.lastDumpData) { alert('Please do HAPPY READ first!'); return; }
   const pwd = prompt('Enter password to backup to GitHub:');
@@ -827,7 +817,6 @@ async function backupGitHub() {
   }
 }
 
-// === EVENIMENTE ===
 el.connectBtn.addEventListener('click', connect);
 el.disconnectBtn.addEventListener('click', disconnect);
 el.dumpBtn.addEventListener('click', happyRead);
@@ -841,7 +830,6 @@ el.flashSizeSelect.addEventListener('change', (e) => {
   }
 });
 
-// === INIT ===
 log('ESP32 Flash Dumper & Writer ready', 'success');
 log('Click CONNECT to start', 'info');
 log('Automatic flash detection enabled (KB/MB fix)', 'info');
