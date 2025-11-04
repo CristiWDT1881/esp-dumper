@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -409,22 +410,29 @@ const term = {
   }
 };
 
-// === DETECTARE FLASH SIZE - VERSIUNE FINALĂ, ROBUSTĂ ===
+// === DETECTARE FLASH SIZE - VERSIUNE CORECTATĂ PENTRU KB/MB ===
 async function detectFlashSize() {
   try {
     log('Detecting flash size...', 'info');
-    term.clean(); // Resetează buffer-ul
+    term.clean();
 
-    // METODĂ 1: Stub loader (cea mai de încredere pe ESP32-S3)
+    // METODĂ 1: Stub loader
     try {
       const stubFlashSize = await state.esploader.getFlashSize();
-      if (stubFlashSize && stubFlashSize > 1024 * 1024) { // Ignore if too small (buggy detection)
-        state.detectedFlashSize = stubFlashSize / (1024 * 1024);
-        state.detectedFlashBytes = stubFlashSize;
-        log(`Detected from stub: ${state.detectedFlashSize} MB`, 'success');
+      if (stubFlashSize && stubFlashSize > 0) {
+        let detectedMB;
+
+        if (stubFlashSize < 1024 * 1024) {
+          detectedMB = stubFlashSize / 1024;  // KB → MB
+          log(`Stub returned ${stubFlashSize} KB → converted to ${detectedMB} MB`, 'info');
+        } else {
+          detectedMB = stubFlashSize / (1024 * 1024);  // Byți → MB
+        }
+
+        state.detectedFlashSize = detectedMB;
+        state.detectedFlashBytes = detectedMB * 1024 * 1024;
+        log(`Detected from stub: ${state.detectedFlashSize.toFixed(2)} MB`, 'success');
         return true;
-      } else {
-        log('Stub flash size too small or invalid, skipping...', 'warning');
       }
     } catch (e) {
       log('Stub getFlashSize failed, trying output parsing...', 'info');
@@ -442,19 +450,14 @@ async function detectFlashSize() {
       }
     }
 
-    // METODĂ 3: Flash ID (doar pentru ESP32 clasic)
+    // METODĂ 3: Flash ID
     try {
       const flashId = await state.esploader.flashId();
       if (flashId === 0 || flashId === 0xFFFFFF || flashId === 0x000000) {
-        log('Invalid Flash ID (0x000000) - skipping', 'warning');
+        log('Invalid Flash ID - skipping', 'warning');
       } else {
         log(`Flash ID: 0x${flashId.toString(16).padStart(6, '0')}`, 'info');
-        const manufacturer = (flashId >> 16) & 0xFF;
-        const device = flashId & 0xFFFF;
-        log(`Manufacturer: 0x${manufacturer.toString(16).padStart(2, '0')}`, 'info');
-        log(`Device: 0x${device.toString(16).padStart(4, '0')}`, 'info');
-
-        const sizeCode = device & 0xFF; // Corrected to low byte for capacity
+        const sizeCode = (flashId & 0xFF00) >> 8;
         const flashSizeMap = {
           0x14: 1, 0x15: 2, 0x16: 4, 0x17: 8,
           0x18: 16, 0x19: 32, 0x1A: 64,
@@ -469,7 +472,7 @@ async function detectFlashSize() {
         }
       }
     } catch (e) {
-      log('FlashID not supported on this chip (normal for ESP32-S3)', 'info');
+      log('FlashID not supported (normal for ESP32-S3)', 'info');
     }
 
     // FALLBACK
@@ -487,6 +490,7 @@ async function detectFlashSize() {
   }
 }
 
+// === FUNCȚII DE MĂRIME EFECTIVĂ ===
 function getEffectiveFlashBytes() {
   if (state.flashSizeMode === 'auto') {
     return state.detectedFlashBytes;
@@ -506,11 +510,11 @@ function getEffectiveFlashSize() {
 
 function updateFlashSizeDisplay() {
   const effectiveSize = getEffectiveFlashSize();
-  const modeText = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
+  const modeText = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize.toFixed(2)} MB)` : '(manual)';
   el.flashSize.textContent = `${effectiveSize} MB ${modeText}`;
 }
 
-// === RESTUL FUNCȚIILOR (connect, disconnect, happyRead, etc.) ===
+// === CONECTARE ===
 async function connect() {
   try {
     if (!('serial' in navigator)) {
@@ -635,6 +639,7 @@ async function disconnect() {
   }
 }
 
+// === HAPPY READ ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
@@ -697,6 +702,7 @@ async function happyRead() {
   }
 }
 
+// === HAPPY WRITE ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   const file = el.writeFile.files[0];
@@ -771,6 +777,7 @@ async function happyWrite() {
   }
 }
 
+// === GITHUB BACKUP ===
 async function backupGitHub() {
   if (!state.lastDumpData) { alert('Please do HAPPY READ first!'); return; }
   const pwd = prompt('Enter password to backup to GitHub:');
@@ -820,7 +827,7 @@ async function backupGitHub() {
   }
 }
 
-// Events
+// === EVENIMENTE ===
 el.connectBtn.addEventListener('click', connect);
 el.disconnectBtn.addEventListener('click', disconnect);
 el.dumpBtn.addEventListener('click', happyRead);
@@ -834,10 +841,11 @@ el.flashSizeSelect.addEventListener('change', (e) => {
   }
 });
 
-// Init
+// === INIT ===
 log('ESP32 Flash Dumper & Writer ready', 'success');
 log('Click CONNECT to start', 'info');
-log('Automatic flash detection enabled', 'info');
+log('Automatic flash detection enabled (KB/MB fix)', 'info');
+log('Manual override available', 'info');
 log('Write protection: ±25% compatibility check', 'info');
 </script>
 </body>
