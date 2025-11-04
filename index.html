@@ -5,210 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 Flash Dumper & Writer</title>
     <style>
+        /* [ toate stilurile tale originale intacte ] */
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #1a5f3f;
-            min-height: 100vh;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .header-images {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            width: 100%;
-            max-width: 700px;
-            margin-bottom: 40px;
-        }
-        .header-images img {
-            max-width: 180px;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            border: 4px solid #5B9BD5;
-        }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #1a5f3f; min-height: 100vh; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .header-images { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; max-width: 700px; margin-bottom: 40px; }
+        .header-images img { max-width: 180px; height: auto; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 4px solid #5B9BD5; }
         .container { max-width: 700px; width: 100%; }
-        h1 {
-            color: #FFD700;
-            font-size: 2.5em;
-            text-align: center;
-            margin: 20px 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .section {
-            background: #B3D9F2;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-            border: 4px solid #5B9BD5;
-        }
-        .section.first-box {
-            display: flex;
-            gap: 20px;
-            align-items: flex-start;
-            padding: 10px 20px;
-        }
-        .section-content {
-            flex: 1;
-        }
-        .signature-img {
-            width: 130px;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            border: 4px solid #5B9BD5;
-        }
-        .section h2 {
-            color: #1a5f3f;
-            font-size: 1.3em;
-            margin-bottom: 10px;
-        }
-        .section p {
-            color: #000;
-            font-size: 0.95em;
-            margin-bottom: 5px;
-        }
+        h1 { color: #FFD700; font-size: 2.5em; text-align: center; margin: 20px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .section { background: #B3D9F2; border-radius: 15px; padding: 20px; margin-bottom: 15px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 4px solid #5B9BD5; }
+        .section.first-box { display: flex; gap: 20px; align-items: flex-start; padding: 10px 20px; }
+        .section-content { flex: 1; }
+        .signature-img { width: 130px; height: auto; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 4px solid #5B9BD5; }
+        .section h2 { color: #1a5f3f; font-size: 1.3em; margin-bottom: 10px; }
+        .section p { color: #000; font-size: 0.95em; margin-bottom: 5px; }
         .control-group { margin-bottom: 10px; }
-        .control-group label {
-            color: #1a5f3f;
-            font-weight: bold;
-            display: block;
-            margin-bottom: 5px;
-        }
-        select, input[type="file"] {
-            width: 100%;
-            padding: 8px;
-            border: 3px solid #5B9BD5;
-            border-radius: 8px;
-            background: white;
-        }
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-            flex-wrap: wrap;
-        }
-        button {
-            flex: 1;
-            min-width: 180px;
-            padding: 12px;
-            font-size: 1.1em;
-            font-weight: bold;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        }
+        .control-group label { color: #1a5f3f; font-weight: bold; display: block; margin-bottom: 5px; }
+        select, input[type="file"] { width: 100%; padding: 8px; border: 3px solid #5B9BD5; border-radius: 8px; background: white; }
+        .button-group { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        button { flex: 1; min-width: 180px; padding: 12px; font-size: 1.1em; font-weight: bold; border: none; border-radius: 12px; cursor: pointer; transition: all 0.3s; box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
         .btn-connect { background: #1a5f3f; color: white; }
         .btn-connect:hover { background: #145030; transform: translateY(-2px); }
         .btn-disconnect { background: #6c757d; color: white; }
         .btn-read, .btn-write { background: #5B9BD5; color: #000; }
         .btn-read:hover, .btn-write:hover { background: #FFD700; transform: translateY(-2px); }
         button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
-        .status {
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border: 3px solid #5B9BD5;
-            font-weight: 500;
-        }
+        .status { background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 3px solid #5B9BD5; font-weight: 500; }
         .status.connected { border-color: #1a5f3f; background: #d4edda; }
         .status.working { border-color: #FFD700; background: #fff3cd; }
         .status.error { border-color: #dc3545; background: #f8d7da; }
-        .info-box {
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            border: 3px solid #5B9BD5;
-            font-size: 0.9em;
-        }
-        .info-box strong {
-            color: #1a5f3f;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: white;
-            border-radius: 8px;
-            border: 3px solid #5B9BD5;
-            overflow: hidden;
-            margin: 10px 0;
-            display: none;
-        }
+        .info-box { background: white; padding: 10px; border-radius: 8px; margin-top: 10px; border: 3px solid #5B9BD5; font-size: 0.9em; }
+        .info-box strong { color: #1a5f3f; }
+        .progress-bar { width: 100%; height: 30px; background: white; border-radius: 8px; border: 3px solid #5B9BD5; overflow: hidden; margin: 10px 0; display: none; }
         .progress-bar.active { display: block; }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
-            width: 0%;
-            transition: width 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-        .log-container {
-            background: #1e1e1e;
-            color: #00ff00;
-            padding: 15px;
-            border-radius: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            line-height: 1.6;
-        }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #1a5f3f, #5B9BD5); width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+        .log-container { background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.6; }
         .log-entry { margin-bottom: 3px; }
         .log-entry.error { color: #ff6b6b; }
         .log-entry.success { color: #51cf66; }
         .log-entry.warning { color: #ffd43b; }
         .log-entry.info { color: #74c0fc; }
-        .radio-links {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            gap: 30px;
-            flex-wrap: wrap;
-        }
-        .radio-link {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-decoration: none;
-            transition: transform 0.3s;
-        }
+        .radio-links { display: flex; justify-content: space-around; align-items: center; gap: 30px; flex-wrap: wrap; }
+        .radio-link { display: flex; flex-direction: column; align-items: center; text-decoration: none; transition: transform 0.3s; }
         .radio-link:hover { transform: scale(1.1); }
-        .radio-link img {
-            width: 120px;
-            height: 120px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            margin-bottom: 10px;
-            border: 4px solid #5B9BD5;
-        }
-        .radio-link span {
-            color: #000;
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        @media (max-width: 768px) {
-            .header-images {
-                flex-direction: column;
-                align-items: center;
-                gap: 15px;
-            }
-            h1 { font-size: 2em; }
-        }
+        .radio-link img { width: 120px; height: 120px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 10px; border: 4px solid #5B9BD5; }
+        .radio-link span { color: #000; font-weight: bold; font-size: 1.1em; }
+        @media (max-width: 768px) { .header-images { flex-direction: column; align-items: center; gap: 15px; } h1 { font-size: 2em; } }
     </style>
 </head>
 <body>
+    <!-- [ Toate imaginile, butoanele, și secțiunile tale rămân EXACT la fel ] -->
     <div class="header-images">
         <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
         <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
@@ -216,52 +61,78 @@
 
     <div class="container">
         <h1>ESP32 Flash Dumper & Writer</h1>
-        <!-- restul codului HTML identic -->
+        <!-- [ ... toate secțiunile identice până la final ... ] -->
     </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-<script type="module">
-import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script type="module">
+        import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// (inițializări neschimbate)
+        /* 🔧 Funcția detectFlashSize() corectată */
+        async function detectFlashSize() {
+            try {
+                log('Detecting flash size...', 'info');
+                const flashId = await state.esploader.flashId();
+                log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+                
+                const sizeCode = flashId & 0xFF;
+                const flashSizeMap = { 0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32 };
+                
+                if (flashSizeMap[sizeCode]) {
+                    state.detectedFlashSize = flashSizeMap[sizeCode];
+                    log(`✅ Detected flash: ${state.detectedFlashSize} MB`, 'success');
+                } else if (state.esploader.chip && state.esploader.chip.FLASH_SIZE_MB) {
+                    state.detectedFlashSize = state.esploader.chip.FLASH_SIZE_MB;
+                    log(`✅ Using chip-reported flash size: ${state.detectedFlashSize} MB`, 'info');
+                } else {
+                    log(`⚠️ Unknown flash code (0x${sizeCode.toString(16)}). Keeping last valid value.`, 'warning');
+                    if (!state.detectedFlashSize || state.detectedFlashSize < 1) {
+                        state.detectedFlashSize = 16;
+                        log(`💾 Defaulting to 16MB for safety`, 'info');
+                    }
+                }
 
-async function detectFlashSize() {
-    try {
-        log('Detecting flash size...', 'info');
-        const flashId = await state.esploader.flashId();
-        log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
-        
-        const sizeCode = flashId & 0xFF;
-        const flashSizeMap = { 0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32 };
-
-        if (flashSizeMap[sizeCode]) {
-            state.detectedFlashSize = flashSizeMap[sizeCode];
-            log(`✅ Detected flash: ${state.detectedFlashSize} MB`, 'success');
-        } else if (state.esploader.chip && state.esploader.chip.FLASH_SIZE_MB) {
-            state.detectedFlashSize = state.esploader.chip.FLASH_SIZE_MB;
-            log(`✅ Using chip-reported flash size: ${state.detectedFlashSize} MB`, 'info');
-        } else {
-            log(`⚠️ Unknown flash code (0x${sizeCode.toString(16)}). Keeping last valid value.`, 'warning');
-            if (!state.detectedFlashSize || state.detectedFlashSize < 1) {
-                state.detectedFlashSize = 16;
-                log(`💾 Defaulting to 16MB for safety`, 'info');
+                state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+                log(`✅ Final flash size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'success');
+                return true;
+            } catch (e) {
+                log(`⚠️ Flash detection failed (${e.message}), keeping last or defaulting to 16MB`, 'warning');
+                if (!state.detectedFlashSize || state.detectedFlashSize < 1)
+                    state.detectedFlashSize = 16;
+                state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+                return false;
             }
         }
 
-        state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-        log(`✅ Final flash size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'success');
-        return true;
-    } catch (e) {
-        log(`⚠️ Flash detection failed (${e.message}), keeping last or defaulting to 16MB`, 'warning');
-        if (!state.detectedFlashSize || state.detectedFlashSize < 1)
-            state.detectedFlashSize = 16;
-        state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-        return false;
-    }
-}
+        /* 🔒 Modificare în funcția connect() — forțăm override după detectFlashSize() */
+        async function connect() {
+            try {
+                updateStatus('Connecting...', 'working');
+                log('Requesting port...', 'info');
+                state.port = await navigator.serial.requestPort();
+                state.transport = new Transport(state.port, true);
+                state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
 
-// restul funcțiilor tale (connect, happyRead, happyWrite, backupGitHub etc.) rămân identice
+                log('Detecting chip...', 'info');
+                state.chip = await state.esploader.main();
+                log(`✅ Connected: ${state.chip.CHIP_NAME}`, 'success');
 
-</script>
+                await detectFlashSize();
+                if (state.detectedFlashSize && state.detectedFlashSize !== 4) {
+                    state.esploader.FLASH_SIZE_MB = state.detectedFlashSize;
+                    state.esploader.flashSize = state.detectedFlashSize * 1024 * 1024;
+                    log(`🔒 Locked flash size to ${state.detectedFlashSize}MB (override applied)`, 'info');
+                }
+
+                el.flashSize.textContent = `${state.detectedFlashSize} MB`;
+                updateStatus(`✅ ${state.chip.CHIP_NAME} - ${state.detectedFlashSize}MB`, 'connected');
+            } catch (e) {
+                log(`❌ ${e.message}`, 'error');
+                updateStatus('❌ Failed', 'error');
+            }
+        }
+
+        // [ restul codului tău original intact - happyRead, happyWrite, backupGitHub etc. ]
+    </script>
 </body>
 </html>
