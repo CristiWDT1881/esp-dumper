@@ -383,8 +383,13 @@
             write: (t) => log(t)
         };
 
-        // === DETECT FLASH SIZE - CORECTAT ===
-        async function detectFlashSize() {
+        // === DETECT FLASH SIZE - FINAL VERSION (cu cache) ===
+        async function detectFlashSize(force = false) {
+            if (state.detectedFlashSize > 0 && !force) {
+                log(`Using cached flash size: ${state.detectedFlashSize}MB`, 'info');
+                return true;
+            }
+
             try {
                 log('Detecting flash size...', 'info');
                 const flashId = await state.esploader.flashId();
@@ -396,15 +401,7 @@
                 log(`Device: ${device.toString(16).toUpperCase()}`, 'info');
 
                 const sizeCode = flashId & 0xFF;
-                const flashSizeMap = {
-                    0x14: 1,   // 1MB
-                    0x15: 2,   // 2MB
-                    0x16: 4,   // 4MB
-                    0x17: 8,   // 8MB
-                    0x18: 16,  // 16MB
-                    0x19: 32,  // 32MB
-                    0x20: 64   // 64MB
-                };
+                const flashSizeMap = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x20:64};
 
                 if (flashSizeMap[sizeCode]) {
                     state.detectedFlashSize = flashSizeMap[sizeCode];
@@ -418,9 +415,14 @@
                     return false;
                 }
             } catch (e) {
-                log(`Flash detection failed: ${e.message}. Using 4MB.`, 'warning');
-                state.detectedFlashSize = 4;
-                state.detectedFlashBytes = 4 * 1024 * 1024;
+                log(`Flash ID read failed: ${e.message}`, 'warning');
+                if (state.detectedFlashSize === 0) {
+                    log(`No previous detection, assuming 4MB`, 'warning');
+                    state.detectedFlashSize = 4;
+                    state.detectedFlashBytes = 4 * 1024 * 1024;
+                } else {
+                    log(`Keeping previous size: ${state.detectedFlashSize}MB`, 'info');
+                }
                 return false;
             }
         }
@@ -504,9 +506,10 @@
                 }
                 state.macAddress = macAddr;
                 
-                // === DETECT FLASH & UPDATE UI ===
+                // === DETECT FLASH ONCE ===
                 await detectFlashSize();
 
+                // === UPDATE UI ===
                 el.chipType.textContent = state.chipType;
                 el.flashSize.textContent = `${state.detectedFlashSize} MB`;
                 el.macAddress.textContent = state.macAddress === 'Unknown' ? 'N/A' : state.macAddress;
@@ -678,13 +681,18 @@
             if (!state.connected || state.isOperating) return;
             const file = el.writeFile.files[0];
             if (!file) { alert('Please select a firmware file!'); return; }
+
+            // === VERIFICĂ FLASH SIZE (fără re-detectare) ===
+            if (state.detectedFlashSize === 0) {
+                log('Flash size unknown! Forcing detection...', 'warning');
+                await detectFlashSize(true);
+            }
+
             try {
                 state.isOperating = true;
                 el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = true;
                 log('====================================','info');
                 log('Starting Happy Write...','info');
-                log('Re-analyzing device...','info');
-                await detectFlashSize();
                 const fileSizeBytes = file.size;
                 const fileSizeMB = (fileSizeBytes/(1024*1024)).toFixed(2);
                 log('====================================','info');
