@@ -385,6 +385,12 @@ write: (t) => log(t)
 
 async function detectFlashSize() {
 try {
+// If already detected successfully, keep that value
+if (state.detectedFlashSize > 0 && state.detectedFlashBytes > 0) {
+log(`Using previously detected flash size: ${state.detectedFlashSize} MB`, 'info');
+return true;
+}
+
 log('Detecting flash size...', 'info');
 const flashId = await state.esploader.flashId();
 
@@ -392,8 +398,17 @@ const flashId = await state.esploader.flashId();
 const manufacturer = (flashId >> 16) & 0xFF;
 const device = flashId & 0xFFFF;
 
-log(`Manufacturer: 0x${manufacturer.toString(16).padStart(2, '0')}`, 'info');
-log(`Device: 0x${device.toString(16).padStart(4, '0')}`, 'info');
+log(`Manufacturer: ${manufacturer}`, 'info');
+log(`Device: ${device}`, 'info');
+
+// Ignore invalid readings
+if (manufacturer === 0 || device === 0) {
+if (state.detectedFlashSize > 0) {
+log(`Invalid flash ID, keeping previous detection: ${state.detectedFlashSize} MB`, 'warning');
+return true;
+}
+throw new Error('Invalid flash ID');
+}
 
 // Extract size from device ID (byte 2 usually contains size code)
 const sizeCode = (device >> 8) & 0xFF;
@@ -408,17 +423,28 @@ const flashSizeMap = {
 0x20: 16  // Alternative 16MB code
 };
 
-state.detectedFlashSize = flashSizeMap[sizeCode] || 4;
+const detectedSize = flashSizeMap[sizeCode];
+if (!detectedSize) {
+throw new Error(`Unknown size code: 0x${sizeCode.toString(16)}`);
+}
+
+state.detectedFlashSize = detectedSize;
 state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
 
 log(`Detected flash size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'success');
 return true;
 } catch (e) {
+// Only default to 4MB if we have no previous detection
+if (state.detectedFlashSize === 0) {
 log(`Error detecting flash: ${e.message}`, 'warning');
 log(`Defaulting to 4MB - VERIFY before writing!`, 'warning');
 state.detectedFlashSize = 4;
 state.detectedFlashBytes = 4 * 1024 * 1024;
 return false;
+} else {
+log(`Detection error, keeping previous value: ${state.detectedFlashSize} MB`, 'warning');
+return true;
+}
 }
 }
 
@@ -860,5 +886,3 @@ log('Write protection: ±25% compatibility check', 'info');
 </script>
 </body>
 </html>
-
-
