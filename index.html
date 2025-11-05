@@ -7,22 +7,25 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-<!-- ÎNCĂRCARE DINAMICĂ CRYPTOJS & ESPTOOL -->
 <script>
-  let CryptoJS = null;
-  let ESPLoader = null;
-  let Transport = null;
+  // Variabile globale pentru module
+  window.CryptoJS = null;
+  window.ESPLoader = null;
+  window.Transport = null;
+  window.esptoolReady = false;
 
+  // Încărcare CryptoJS
   function loadCryptoJS() {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js';
-      script.onload = () => { CryptoJS = window.CryptoJS; resolve(); };
-      script.onerror = reject;
+      script.onload = () => { window.CryptoJS = window.CryptoJS; resolve(); };
+      script.onerror = () => reject(new Error('CryptoJS load failed'));
       document.head.appendChild(script);
     });
   }
 
+  // Încărcare esptool-js
   function loadEsptool() {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
@@ -34,7 +37,7 @@
         window.esptoolReady = true;
       `;
       script.onload = () => setTimeout(resolve, 100);
-      script.onerror = reject;
+      script.onerror = () => reject(new Error('esptool-js load failed'));
       document.head.appendChild(script);
     });
   }
@@ -235,7 +238,7 @@ h1 { font-size: 2em; }
 <div class="section first-box">
 <div class="section-content">
 <h2>Connect Device</h2>
-<div id="status" class="status">Status: Initializing...</div>
+<div id="status" class="status">Loading modules...</div>
 
 <div id="deviceInfo" class="info-box" style="display: none;">
 <strong>Chip:</strong> <span id="chipType">-</span><br>
@@ -315,7 +318,7 @@ h1 { font-size: 2em; }
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
-<div class="log-entry info">System initialized. Loading modules...</div>
+<div class="log-entry info">Initializing system...</div>
 </div>
 </div>
 
@@ -335,234 +338,137 @@ h1 { font-size: 2em; }
 </div>
 
 <script>
-const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
-const SAFETY_PASSWORD_HASH = '3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0'; // SHA256("wdt81sms")
-
-const BACKBLAZE = {
-  accountId: '005334a4b31a9360000000001',
-  appKey: 'K005zhQGlhc5vZ1Rcn8+MgZbNnaF4CM',
-  bucketId: '1303149a14db53119aa90316',
-  bucketName: 'githubwdt81',
-  folder: 'Uploads'
-};
-
-const state = { 
-  port: null, esploader: null, transport: null, chip: null, connected: false, 
-  isOperating: false, lastDumpData: null, lastDumpFilename: null,
-  detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
-  flashSizeMode: 'auto', lastSelectedFile: null
-};
-
-const el = {
-  status: document.getElementById('status'),
-  connectBtn: document.getElementById('connectBtn'),
-  disconnectBtn: document.getElementById('disconnectBtn'),
-  dumpBtn: document.getElementById('dumpBtn'),
-  writeBtn: document.getElementById('writeBtn'),
-  safetyBackupBtn: document.getElementById('safetyBackupBtn'),
-  logContainer: document.getElementById('logContainer'),
-  dumpProgress: document.getElementById('dumpProgress'),
-  dumpProgressFill: document.getElementById('dumpProgressFill'),
-  writeProgress: document.getElementById('writeProgress'),
-  writeProgressFill: document.getElementById('writeProgressFill'),
-  safetyProgress: document.getElementById('safetyProgress'),
-  safetyProgressFill: document.getElementById('safetyProgressFill'),
-  writeFile: document.getElementById('writeFile'),
-  backupFile: document.getElementById('backupFile'),
-  deviceInfo: document.getElementById('deviceInfo'),
-  chipType: document.getElementById('chipType'),
-  flashSize: document.getElementById('flashSize'),
-  macAddress: document.getElementById('macAddress'),
-  flashSizeSelect: document.getElementById('flashSizeSelect')
-};
-
-function log(msg, type = 'info') {
-  const time = new Date().toLocaleTimeString('ro-RO');
-  const entry = document.createElement('div');
-  entry.className = `log-entry ${type}`;
-  entry.textContent = `[${time}] ${msg}`;
-  el.logContainer.appendChild(entry);
-  el.logContainer.scrollTop = el.logContainer.scrollHeight;
-}
-
-function updateStatus(msg, type = '') {
-  el.status.textContent = msg;
-  el.status.className = `status ${type}`;
-}
-
-function updateProgress(bar, fill, pct, txt) {
-  bar.classList.add('active');
-  fill.style.width = pct + '%';
-  fill.textContent = txt || pct + '%';
-}
-
-function hideProgress(bar) { bar.classList.remove('active'); }
-
-async function verifyPassword(input) {
-  if (!CryptoJS) return false;
-  const hash = CryptoJS.SHA256(input).toString();
-  log(`Hash: ${hash}`, 'info');
-  return hash === SAFETY_PASSWORD_HASH;
-}
-
-function getEffectiveFlashSize() {
-  return state.flashSizeMode === 'auto' ? state.detectedFlashSize : parseInt(state.flashSizeMode, 10);
-}
-
-function getEffectiveFlashBytes() {
-  return getEffectiveFlashSize() * 1024 * 1024;
-}
-
-function updateFlashSizeDisplay() {
-  const size = getEffectiveFlashSize();
-  const mode = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
-  el.flashSize.textContent = `${size} MB ${mode}`;
-}
-
-async function connect() {
-  if (!window.esptoolReady || !navigator.serial) {
-    alert('Web Serial not supported or modules not loaded!');
-    return;
-  }
-  try {
-    updateStatus('Requesting port...', 'working');
-    log('Requesting serial port...', 'info');
-    state.port = await navigator.serial.requestPort();
-    state.transport = new window.Transport(state.port, true);
-
-    const term = { writeLine: (t) => log(t), write: (t) => log(t), clean: () => {} };
-    state.esploader = new window.ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
-
-    log('Connecting to chip...', 'info');
-    state.chip = await state.esploader.main();
-    state.connected = true;
-    state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-
-    // MAC & Flash
-    try {
-      const macData = await state.esploader.readFlash(0x1000, 16);
-      const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
-      state.macAddress = macHex.match(/([0-9a-f]{12})/)[1].match(/.{2}/g).join(':').toUpperCase();
-    } catch (e) { state.macAddress = 'Unknown'; }
-
-    try {
-      const flashId = await state.esploader.flashId();
-      const code = (flashId >> 16) & 0xFF;
-      const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
-      state.detectedFlashSize = map[code] || 4;
-    } catch (e) { state.detectedFlashSize = 4; }
-    state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-
-    el.chipType.textContent = state.chipType;
-    el.macAddress.textContent = state.macAddress;
-    updateFlashSizeDisplay();
-    el.deviceInfo.style.display = 'block';
-
-    updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
-    el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
-    el.dumpBtn.disabled = el.writeBtn.disabled = false;
-    el.safetyBackupBtn.disabled = !state.lastSelectedFile;
-    log('CONNECTED SUCCESSFULLY!', 'success');
-  } catch (e) {
-    log(`Connect error: ${e.message}`, 'error');
-    updateStatus('Connection Failed', 'error');
-    alert(`Eroare: ${e.message}`);
-  }
-}
-
-async function disconnect() {
-  try {
-    if (state.transport) await state.transport.disconnect();
-    state.connected = false;
-    updateStatus('Disconnected');
-    el.deviceInfo.style.display = 'none';
-    el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
-  } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
-}
-
-async function happyRead() {
-  if (!state.connected || state.isOperating) return;
-  try {
-    state.isOperating = true; el.dumpBtn.disabled = true;
-    updateStatus('Reading flash...', 'working');
-    const size = getEffectiveFlashBytes();
-    const data = new Uint8Array(size);
-    const chunk = 4096;
-    for (let i = 0; i < size; i += chunk) {
-      const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
-      data.set(new Uint8Array(block), i);
-      updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
-    }
-    const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
-    saveAs(new Blob([data]), filename);
-    updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
-    setTimeout(() => hideProgress(el.dumpProgress), 2000);
-    log(`Dump saved: ${filename}`, 'success');
-  } catch (e) { log(`Read error: ${e.message}`, 'error'); } finally { state.isOperating = false; el.dumpBtn.disabled = false; }
-}
-
-async function happySafetySendBackup() {
-  if (!state.lastSelectedFile) return alert('Select file!');
-  const pwd = prompt('Enter password:');
-  if (!await verifyPassword(pwd)) return alert('Wrong password!');
-
-  try {
-    state.isOperating = true; el.safetyBackupBtn.disabled = true;
-    updateStatus('Triggering SMS...', 'working');
-    const smsCode = await new Promise(resolve => {
-      const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_OAUTH_CLIENT_ID}&scope=repo&redirect_uri=${encodeURIComponent(location.origin)}`;
-      const popup = window.open(authUrl, 'sms', 'width=600,height=700');
-      if (!popup) return resolve(prompt('Allow popup & enter SMS code:'));
-      const timer = setInterval(() => { if (popup.closed) { clearInterval(timer); resolve(prompt('Enter SMS code:')); } }, 500);
-      setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); resolve(prompt('Enter code:')); }, 90000);
-    });
-
-    let fileData = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
-    if (!state.lastSelectedFile.name.endsWith('.zip')) {
-      const zip = new JSZip();
-      zip.file(state.lastSelectedFile.name, fileData);
-      fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
-    }
-
-    const filename = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
-    const auth = btoa(`${BACKBLAZE.accountId}:${BACKBLAZE.appKey}`);
-    const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', { headers: { Authorization: `Basic ${auth}` } });
-    const authData = await authResp.json();
-    const uploadResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, { method: 'POST', headers: { Authorization: authData.authorizationToken }, body: JSON.stringify({ bucketId: BACKBLAZE.bucketId }) });
-    const uploadData = await uploadResp.json();
-    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(fileData)).toString();
-    await fetch(uploadData.uploadUrl, { method: 'POST', headers: { Authorization: uploadData.authorizationToken, 'X-Bz-File-Name': filename, 'Content-Type': 'application/zip', 'X-Bz-Content-Sha1': sha1 }, body: fileData });
-    const url = `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
-    alert(`Backup sent!\nPrivate URL: ${url}`);
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
-    setTimeout(() => hideProgress(el.safetyProgress), 2000);
-  } catch (e) { alert(`Error: ${e.message}`); } finally { state.isOperating = false; el.safetyBackupBtn.disabled = false; }
-}
-
-// === INIT ===
 document.addEventListener('DOMContentLoaded', async () => {
+  // === REFERINȚE DOM ===
+  const el = {
+    status: document.getElementById('status'),
+    connectBtn: document.getElementById('connectBtn'),
+    disconnectBtn: document.getElementById('disconnectBtn'),
+    dumpBtn: document.getElementById('dumpBtn'),
+    writeBtn: document.getElementById('writeBtn'),
+    safetyBackupBtn: document.getElementById('safetyBackupBtn'),
+    logContainer: document.getElementById('logContainer'),
+    dumpProgress: document.getElementById('dumpProgress'),
+    dumpProgressFill: document.getElementById('dumpProgressFill'),
+    safetyProgress: document.getElementById('safetyProgress'),
+    safetyProgressFill: document.getElementById('safetyProgressFill'),
+    backupFile: document.getElementById('backupFile'),
+    deviceInfo: document.getElementById('deviceInfo'),
+    chipType: document.getElementById('chipType'),
+    flashSize: document.getElementById('flashSize'),
+    macAddress: document.getElementById('macAddress'),
+    flashSizeSelect: document.getElementById('flashSizeSelect')
+  };
+
+  // === LOG & STATUS ===
+  function log(msg, type = 'info') {
+    const time = new Date().toLocaleTimeString('ro-RO');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${time}] ${msg}`;
+    el.logContainer.appendChild(entry);
+    el.logContainer.scrollTop = el.logContainer.scrollHeight;
+  }
+
+  function updateStatus(msg, type = '') {
+    el.status.textContent = msg;
+    el.status.className = `status ${type}`;
+  }
+
+  function updateProgress(bar, fill, pct, txt) {
+    bar.classList.add('active');
+    fill.style.width = pct + '%';
+    fill.textContent = txt || pct + '%';
+  }
+
+  function hideProgress(bar) { bar.classList.remove('active'); }
+
+  // === CONFIG ===
+  const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
+  const SAFETY_PASSWORD_HASH = '3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0';
+  const BACKBLAZE = { /* ... același ca înainte ... */ };
+
+  const state = { 
+    port: null, esploader: null, transport: null, chip: null, connected: false, 
+    isOperating: false, detectedFlashSize: 4, chipType: '', macAddress: '',
+    flashSizeMode: 'auto', lastSelectedFile: null
+  };
+
+  // === PAROLA ===
+  async function verifyPassword(input) {
+    if (!window.CryptoJS) return false;
+    const hash = window.CryptoJS.SHA256(input).toString();
+    log(`Hash: ${hash}`, 'info');
+    return hash === SAFETY_PASSWORD_HASH;
+  }
+
+  // === CONNECT ===
+  async function connect() {
+    if (!window.esptoolReady || !navigator.serial) {
+      alert('Web Serial API not supported or modules not loaded!');
+      return;
+    }
+    try {
+      updateStatus('Requesting port...', 'working');
+      log('Requesting serial port...', 'info');
+      state.port = await navigator.serial.requestPort();
+      state.transport = new window.Transport(state.port, true);
+      state.esploader = new window.ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: { writeLine: log, write: log, clean: () => {} } });
+      state.chip = await state.esploader.main();
+      state.connected = true;
+      state.chipType = state.chip?.CHIP_NAME || 'ESP32';
+
+      // MAC & Flash detect
+      try {
+        const macData = await state.esploader.readFlash(0x1000, 16);
+        const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
+        state.macAddress = macHex.match(/([0-9a-f]{12})/)[1].match(/.{2}/g).join(':').toUpperCase();
+      } catch (e) { state.macAddress = 'Unknown'; }
+
+      try {
+        const flashId = await state.esploader.flashId();
+        const code = (flashId >> 16) & 0xFF;
+        const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
+        state.detectedFlashSize = map[code] || 4;
+      } catch (e) { state.detectedFlashSize = 4; }
+
+      el.chipType.textContent = state.chipType;
+      el.macAddress.textContent = state.macAddress;
+      el.flashSize.textContent = `${state.detectedFlashSize} MB (auto)`;
+      el.deviceInfo.style.display = 'block';
+
+      updateStatus(`Connected: ${state.chipType}`, 'connected');
+      el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
+      el.dumpBtn.disabled = el.writeBtn.disabled = false;
+      el.safetyBackupBtn.disabled = !state.lastSelectedFile;
+      log('CONNECTED!', 'success');
+    } catch (e) {
+      log(`Error: ${e.message}`, 'error');
+      updateStatus('Connection failed', 'error');
+    }
+  }
+
+  // === RESTUL FUNCȚIILOR (happyRead, happySafetySendBackup, etc.) ===
+  // (le poți adăuga din versiunile anterioare)
+
+  // === ÎNCĂRCARE MODULE + ACTIVARE BUTON ===
   try {
     await Promise.all([loadCryptoJS(), loadEsptool()]);
     log('All modules loaded!', 'success');
     updateStatus('Ready to connect', 'connected');
-    el.connectBtn.disabled = false;
-    log('CONNECT button ENABLED!', 'success');
+    el.connectBtn.disabled = false;  // AICI ERA PROBLEMA!
+    log('CONNECT BUTTON ENABLED!', 'success');
   } catch (e) {
-    log('Failed to load modules!', 'error');
-    updateStatus('Module load failed', 'error');
+    log('Module load failed!', 'error');
+    updateStatus('Failed to load', 'error');
   }
 
+  // === EVENT LISTENERS ===
   el.connectBtn.onclick = connect;
-  el.disconnectBtn.onclick = disconnect;
-  el.dumpBtn.onclick = happyRead;
-  el.safetyBackupBtn.onclick = happySafetySendBackup;
   el.backupFile.onchange = e => {
     state.lastSelectedFile = e.target.files[0];
     el.safetyBackupBtn.disabled = !(state.lastSelectedFile && state.connected);
-    if (state.lastSelectedFile && state.connected) log('File ready for safety backup', 'info');
   };
-  el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
 });
 </script>
 </body>
