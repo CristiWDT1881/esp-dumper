@@ -203,13 +203,11 @@ h1 { font-size: 2em; }
 <div class="section-content">
 <h2>Connect Device</h2>
 <div id="status" class="status">Status: Disconnected</div>
-
 <div id="deviceInfo" class="info-box" style="display: none;">
 <strong>Chip:</strong> <span id="chipType">-</span><br>
 <strong>Flash Size:</strong> <span id="flashSize">-</span><br>
 <strong>MAC Address:</strong> <span id="macAddress">-</span>
 </div>
-
 <div class="control-group">
 <label>Flash Size (MB):</label>
 <select id="flashSizeSelect">
@@ -223,7 +221,6 @@ h1 { font-size: 2em; }
 <option value="64">64</option>
 </select>
 </div>
-
 <div class="button-group">
 <button id="connectBtn" class="btn-connect">CONNECT</button>
 <button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
@@ -248,7 +245,7 @@ h1 { font-size: 2em; }
 <div class="section">
 <h2>Happy Safety Send Backup</h2>
 <p><strong>1.</strong> Select file (.bin or ZIP)</p>
-<p><strong>2.</strong> Enter password → GitHub sends SMS to +40764991929</p>
+<p><strong>2.</strong> Enter password → Twilio sends SMS to +40764991929</p>
 <p><strong>3.</strong> Enter code → upload to private Backblaze</p>
 <div class="control-group">
 <label>Select File:</label>
@@ -305,10 +302,14 @@ h1 { font-size: 2em; }
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
 // === CONFIG ===
-const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
+const TWILIO_CONFIG = {
+  accountSid: 'ACc571acebd92791e59f7198974960c9cd',
+  authToken: 'd18527beec119bb602f1928fddd91201',
+  fromPhone: '+19156664089',
+  toPhone: '+40764991929'
+};
 
-// SHA256("wdt81sms") = 3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0
-const SAFETY_PASSWORD_HASH = '3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0';
+const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
 
 const BACKBLAZE = {
   accountId: '005334a4b31a9360000000001',
@@ -318,11 +319,11 @@ const BACKBLAZE = {
   folder: 'Uploads'
 };
 
-const state = { 
-  port: null, esploader: null, transport: null, chip: null, connected: false, 
+const state = {
+  port: null, esploader: null, transport: null, chip: null, connected: false,
   isOperating: false, lastDumpData: null, lastDumpFilename: null,
   detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
-  flashSizeMode: 'auto', lastSelectedFile: null
+  flashSizeMode: 'auto', lastSelectedFile: null, smsCode: null
 };
 
 const el = {
@@ -371,10 +372,8 @@ function updateProgress(bar, fill, pct, txt) {
 
 function hideProgress(bar) { bar.classList.remove('active'); }
 
-// === PAROLA FIXATĂ 100% ===
 function verifyPassword(input) {
   const hash = CryptoJS.SHA256(input).toString();
-  log(`Password hash: ${hash}`, 'info');  // DEBUG – vezi în log
   return hash === SAFETY_PASSWORD_HASH;
 }
 
@@ -392,35 +391,90 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
+// === TWILIO SMS ===
+async function sendTwilioSMS(code) {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
+  const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
+  
+  const body = new URLSearchParams({
+    From: TWILIO_CONFIG.fromPhone,
+    To: TWILIO_CONFIG.toPhone,
+    Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
+  });
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: body.toString()
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Twilio error: ${error}`);
+  }
+
+  return await response.json();
+}
+
+async function triggerTwilioSMS() {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  state.smsCode = code;
+  
+  log('Sending SMS via Twilio...', 'info');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 30, 'Sending SMS...');
+  
+  try {
+    await sendTwilioSMS(code);
+    log('SMS sent successfully!', 'success');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 50, 'SMS sent!');
+    
+    const userCode = prompt('Enter the 6-digit code from SMS:');
+    
+    if (userCode === code) {
+      log('Code verified!', 'success');
+      return true;
+    } else {
+      log('Invalid code!', 'error');
+      alert('Invalid verification code!');
+      return false;
+    }
+  } catch (error) {
+    log(`SMS error: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
 // === CONNECT ===
 async function connect() {
   try {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
-
     updateStatus('Requesting port...', 'working');
     log('Requesting serial port...', 'info');
-
+    
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
-
+    
     const term = {
       writeLine: (text) => log(text),
       write: (text) => log(text),
       clean: () => {}
     };
-
+    
     state.esploader = new ESPLoader({
       transport: state.transport,
       baudrate: 115200,
       romBaudrate: 115200,
       terminal: term
     });
-
+    
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-
+    
     // MAC
     try {
       const macData = await state.esploader.readFlash(0x1000, 16);
@@ -428,7 +482,7 @@ async function connect() {
       const mac = macHex.match(/([0-9a-f]{12})/);
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
     } catch (e) { state.macAddress = 'Unknown'; }
-
+    
     // Flash size
     try {
       const flashId = await state.esploader.flashId();
@@ -436,18 +490,19 @@ async function connect() {
       const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
       state.detectedFlashSize = map[code] || 4;
     } catch (e) { state.detectedFlashSize = 4; }
+    
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-
+    
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
-
+    
     updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = !state.lastSelectedFile;
-
+    
     log('CONNECTED SUCCESSFULLY!', 'success');
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
@@ -473,110 +528,100 @@ async function happyRead() {
   try {
     state.isOperating = true; el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
+    
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunk = 4096;
+    
     for (let i = 0; i < size; i += chunk) {
       const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
       data.set(new Uint8Array(block), i);
       updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
     }
+    
     const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
     saveAs(new Blob([data]), filename);
     state.lastDumpData = data; state.lastDumpFilename = filename;
+    
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
-  } catch (e) { log(`Read error: ${e.message}`, 'error'); } finally { state.isOperating = false; el.dumpBtn.disabled = false; }
+  } catch (e) { log(`Read error: ${e.message}`, 'error'); } 
+  finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
 // === SAFETY BACKUP ===
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
+  
   const pwd = prompt('Enter password:');
   if (!verifyPassword(pwd)) {
     log('Wrong password!', 'error');
     return alert('Wrong password!');
   }
-
+  
   try {
     state.isOperating = true; el.safetyBackupBtn.disabled = true;
-    updateStatus('Triggering SMS...', 'working');
-
-    const smsCode = await triggerTwilioSMS();
-    if (!smsCode || smsCode.length !== 6) throw new Error('Invalid code');
-
+    updateStatus('Verifying via SMS...', 'working');
+    
+    const verified = await triggerTwilioSMS();
+    if (!verified) throw new Error('SMS verification failed');
+    
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 60, 'Preparing file...');
+    
     let fileData = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
+    
     if (!state.lastSelectedFile.name.endsWith('.zip')) {
       const zip = new JSZip();
       zip.file(state.lastSelectedFile.name, fileData);
       fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
     }
-
+    
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading...');
+    
     const filename = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
     const url = await uploadToBackblaze(fileData, filename);
-
+    
     alert(`Backup sent!\nPrivate URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
     setTimeout(() => hideProgress(el.safetyProgress), 2000);
+    log('Backup completed successfully!', 'success');
   } catch (e) {
+    log(`Backup error: ${e.message}`, 'error');
     alert(`Error: ${e.message}`);
   } finally {
-    state.isOperating = false; el.safetyBackupBtn.disabled = false;
+    state.isOperating = false; 
+    el.safetyBackupBtn.disabled = false;
   }
 }
 
-async 
-function triggerTwilioSMS() {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const code = Math.floor(100000 + Math.random()*900000).toString();
-      // store code in session for this browser session (only for testing)
-      sessionStorage.setItem('esp_backup_sms_code', code);
-      const body = new URLSearchParams();
-      body.append('To', '+19156664089');
-      body.append('From', '+19156664089');
-      body.append('Body', 'Codul tău de validare este: ' + code);
-
-      // Note: Using Account SID and Auth Token in client-side code is insecure. This is only for testing.
-      const resp = await fetch('https://api.twilio.com/2010-04-01/Accounts/ACc571acebd92791e59f7198974960c9cd/Messages.json', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa('ACc571acebd92791e59f7198974960c9cd:bd464d5ffbb3e2dafb4f37cd72d3d88f'),
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: body.toString()
-      });
-
-      if (!resp.ok) {
-        const txt = await resp.text();
-        console.error('Twilio error:', resp.status, txt);
-        return reject(new Error('Failed to send SMS: ' + resp.status));
-      }
-
-      // Ask user to input the code (popup)
-      const userCode = prompt('Introdu codul trimis prin SMS:');
-      if (!userCode) return reject(new Error('No code entered'));
-      const expected = sessionStorage.getItem('esp_backup_sms_code');
-      if (userCode.trim() === expected) {
-        sessionStorage.removeItem('esp_backup_sms_code');
-        resolve(userCode.trim());
-      } else {
-        reject(new Error('Invalid code'));
-      }
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
 async function uploadToBackblaze(data, filename) {
   const auth = btoa(`${BACKBLAZE.accountId}:${BACKBLAZE.appKey}`);
-  const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', { headers: { Authorization: `Basic ${auth}` } });
+  const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', { 
+    headers: { Authorization: `Basic ${auth}` } 
+  });
   const authData = await authResp.json();
-  const uploadResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, { method: 'POST', headers: { Authorization: authData.authorizationToken }, body: JSON.stringify({ bucketId: BACKBLAZE.bucketId }) });
+  
+  const uploadResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, { 
+    method: 'POST', 
+    headers: { Authorization: authData.authorizationToken }, 
+    body: JSON.stringify({ bucketId: BACKBLAZE.bucketId }) 
+  });
   const uploadData = await uploadResp.json();
+  
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString();
-  await fetch(uploadData.uploadUrl, { method: 'POST', headers: { Authorization: uploadData.authorizationToken, 'X-Bz-File-Name': filename, 'Content-Type': 'application/zip', 'X-Bz-Content-Sha1': sha1 }, body: data });
+  
+  await fetch(uploadData.uploadUrl, { 
+    method: 'POST', 
+    headers: { 
+      Authorization: uploadData.authorizationToken, 
+      'X-Bz-File-Name': filename, 
+      'Content-Type': 'application/zip', 
+      'X-Bz-Content-Sha1': sha1 
+    }, 
+    body: data 
+  });
+  
   return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
 }
 
@@ -585,14 +630,19 @@ el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
+
 el.backupFile.onchange = e => {
   state.lastSelectedFile = e.target.files[0];
   el.safetyBackupBtn.disabled = !(state.lastSelectedFile && state.connected);
   if (state.lastSelectedFile && state.connected) log('File ready for safety backup', 'info');
 };
-el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
 
-log('Ready! Parola: wdt81sms (litere mici) → FUNCȚIONEAZĂ!', 'success');
+el.flashSizeSelect.onchange = e => { 
+  state.flashSizeMode = e.target.value; 
+  if (state.connected) updateFlashSizeDisplay(); 
+};
+
+log('Ready! Password: wdt81sms | Twilio SMS active!', 'success');
 </script>
 </body>
 </html>
