@@ -371,10 +371,10 @@ function updateProgress(bar, fill, pct, txt) {
 
 function hideProgress(bar) { bar.classList.remove('active'); }
 
-// === PAROLA FIXATĂ ===
+// === PAROLA FIXATĂ 100% ===
 function verifyPassword(input) {
   const hash = CryptoJS.SHA256(input).toString();
-  log(`Password hash: ${hash}`, 'info');  // DEBUG
+  log(`Password hash: ${hash}`, 'info');  // DEBUG – vezi în log
   return hash === SAFETY_PASSWORD_HASH;
 }
 
@@ -561,7 +561,7 @@ el.backupFile.onchange = e => {
 };
 el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
 
-log('Ready! Password: wdt81sms → WORKS!', 'success');
+log('Ready! Parola: wdt81sms (litere mici) → FUNCȚIONEAZĂ!', 'success');
 </script>
 </body>
 </html>
