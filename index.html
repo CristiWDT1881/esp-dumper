@@ -330,16 +330,13 @@ const BACKBLAZE = {
   apiUrl: 'https://api.backblazeb2.com'
 };
 
-// === PAROLĂ CRIPTATĂ (wdt81sms) ===
-const SAFETY_PASSWORD_HASH = 'f7a3c1e5e9d8f4b2a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9';
-
-// === GITHUB OAUTH CLIENT ID (din aplicația ta) ===
-const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';  // ← AI PUS CORECT!
+const SAFETY_PASSWORD_HASH = 'f7a3c1e5e9d8f4b2a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9'; // wdt81sms
+const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr'; // ID-ul tău
 
 const state = { 
   port: null, esploader: null, transport: null, chip: null, connected: false, 
   isOperating: false, lastDumpData: null, lastDumpFilename: null,
-  detectedFlashSize: 0, detectedFlashBytes: 0, chipType: '', macAddress: '',
+  detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
   flashSizeMode: 'auto', lastSelectedFile: null
 };
 
@@ -393,57 +390,83 @@ function updateProgress(bar, fill, pct, txt) {
 function hideProgress(bar) { bar.classList.remove('active'); }
 
 function verifySafetyPassword(input) {
-  const hash = CryptoJS.SHA256(input).toString();
-  return hash === SAFETY_PASSWORD_HASH;
-}
-
-function getEffectiveFlashBytes() {
-  if (state.flashSizeMode === 'auto') return state.detectedFlashBytes;
-  return parseInt(state.flashSizeMode, 10) * 1024 * 1024;
+  return CryptoJS.SHA256(input).toString() === SAFETY_PASSWORD_HASH;
 }
 
 function getEffectiveFlashSize() {
-  if (state.flashSizeMode === 'auto') return state.detectedFlashSize;
-  return parseInt(state.flashSizeMode, 10);
+  return state.flashSizeMode === 'auto' ? state.detectedFlashSize : parseInt(state.flashSizeMode, 10);
+}
+
+function getEffectiveFlashBytes() {
+  return getEffectiveFlashSize() * 1024 * 1024;
 }
 
 function updateFlashSizeDisplay() {
-  const effectiveSize = getEffectiveFlashSize();
-  const modeText = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize.toFixed(2)} MB)` : '(manual)';
-  el.flashSize.textContent = `${effectiveSize} MB ${modeText}`;
+  const size = getEffectiveFlashSize();
+  const mode = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
+  el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
-// === CONNECT ===
+// === CONNECT (FIXED) ===
 async function connect() {
   try {
-    if (!('serial' in navigator)) throw new Error('Web Serial not supported!');
-    updateStatus('Connecting...', 'working');
+    if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
+
+    updateStatus('Requesting port...', 'working');
+    log('Requesting serial port...', 'info');
+
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
-    state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: { writeLine: log, write: log } });
+
+    const term = {
+      writeLine: (text) => log(text),
+      write: (text) => log(text)
+    };
+
+    state.esploader = new ESPLoader({
+      transport: state.transport,
+      baudrate: 115200,
+      romBaudrate: 115200,
+      terminal: term
+    });
+
+    log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
 
-    const macMatch = (await state.esploader.readFlash(0x1000, 6)).match(/MAC:\s*([0-9A-F:]{17})/i);
-    state.macAddress = macMatch ? macMatch[1] : 'Unknown';
+    // MAC
+    try {
+      const macData = await state.esploader.readFlash(0x1000, 16);
+      const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const mac = macHex.match(/([0-9a-f]{12})/);
+      state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
+    } catch (e) { state.macAddress = 'Unknown'; }
 
-    // Detect flash size (simplified)
-    state.detectedFlashSize = 4;
-    state.detectedFlashBytes = 4 * 1024 * 1024;
+    // Flash size
+    try {
+      const flashId = await state.esploader.flashId();
+      const code = (flashId >> 16) & 0xFF;
+      const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
+      state.detectedFlashSize = map[code] || 4;
+    } catch (e) { state.detectedFlashSize = 4; }
+    state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
 
     el.chipType.textContent = state.chipType;
-    updateFlashSizeDisplay();
     el.macAddress.textContent = state.macAddress;
+    updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
 
-    updateStatus(`${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
+    updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = el.safetyBackupBtn.disabled = false;
-    log('Connected!', 'success');
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = false;
+    el.safetyBackupBtn.disabled = !state.lastSelectedFile;
+
+    log('CONNECTED SUCCESSFULLY!', 'success');
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
-    updateStatus('Failed', 'error');
+    updateStatus('Connection Failed', 'error');
+    alert(`Eroare: ${e.message}\n\nÎncearcă:\n1. Deconectează USB\n2. Închide Arduino IDE\n3. Chrome/Edge`);
   }
 }
 
@@ -452,17 +475,18 @@ async function disconnect() {
     if (state.transport) await state.transport.disconnect();
     state.connected = false;
     updateStatus('Disconnected');
+    el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = el.safetyBackupBtn.disabled = true;
-    el.deviceInfo.style.display = 'none';
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
 }
 
 // === HAPPY READ ===
 async function happyRead() {
-  if (!state.connected) return;
+  if (!state.connected || state.isOperating) return;
   try {
     state.isOperating = true; el.dumpBtn.disabled = true;
+    updateStatus('Reading flash...', 'working');
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunk = 4096;
@@ -471,11 +495,12 @@ async function happyRead() {
       data.set(new Uint8Array(block), i);
       updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
     }
-    const blob = new Blob([data]);
-    saveAs(blob, `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`);
-    state.lastDumpData = data;
+    const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
+    saveAs(new Blob([data]), filename);
+    state.lastDumpData = data; state.lastDumpFilename = filename;
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
+    log(`Dump saved: ${filename}`, 'success');
   } catch (e) { log(`Read error: ${e.message}`, 'error'); } finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
@@ -484,14 +509,23 @@ async function backupGitHub() {
   if (!state.lastDumpData) return alert('Do HAPPY READ first!');
   const pwd = prompt('Password:');
   if (pwd !== GITHUB.password) return alert('Wrong!');
-  // ... (upload logic - simplified for brevity)
+  try {
+    updateStatus('Uploading to GitHub...', 'working');
+    const base64 = btoa(String.fromCharCode(...state.lastDumpData));
+    const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
+    await fetch(`https://api.github.com/repos/${GITHUB.repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${GITHUB.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Backup', content: base64, branch: 'main' })
+    });
+    log('GitHub backup complete!', 'success');
+  } catch (e) { log(`GitHub error: ${e.message}`, 'error'); }
 }
 
 // === SAFETY BACKUP ===
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
   if (!state.connected) return alert('Connect first!');
-
   const pwd = prompt('Enter password:');
   if (!verifySafetyPassword(pwd)) return alert('Wrong password!');
 
@@ -508,8 +542,9 @@ async function happySafetySendBackup() {
       fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
     }
 
-    const url = await uploadToBackblaze(fileData, `${BACKBLAZE.privateFolder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`);
-    alert(`Backup sent!\n${url}`);
+    const filename = `${BACKBLAZE.privateFolder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
+    const url = await uploadToBackblaze(fileData, filename);
+    alert(`Backup sent!\nPrivate URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
     setTimeout(() => hideProgress(el.safetyProgress), 2000);
   } catch (e) { alert(`Error: ${e.message}`); } finally { state.isOperating = false; el.safetyBackupBtn.disabled = false; }
@@ -542,10 +577,18 @@ async function uploadToBackblaze(data, filename) {
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
+el.writeBtn.onclick = happyWrite;
 el.githubBackupBtn.onclick = backupGitHub;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
-el.backupFile.onchange = e => { state.lastSelectedFile = e.target.files[0]; el.safetyBackupBtn.disabled = !state.lastSelectedFile || !state.connected; };
-el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
+el.backupFile.onchange = e => {
+  state.lastSelectedFile = e.target.files[0];
+  el.safetyBackupBtn.disabled = !(state.lastSelectedFile && state.connected);
+  if (state.lastSelectedFile && state.connected) log('Safety Backup ready!', 'info');
+};
+el.flashSizeSelect.onchange = e => {
+  state.flashSizeMode = e.target.value;
+  if (state.connected) updateFlashSizeDisplay();
+};
 
 log('Ready! Client ID loaded.', 'success');
 </script>
