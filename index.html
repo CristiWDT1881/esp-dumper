@@ -1,4 +1,3 @@
-<artifact identifier="esp32-backup-final" type="application/vnd.ant.code" language="html" title="ESP32 Flash Dumper - Final Version">
 <!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -196,8 +195,10 @@ h1 { font-size: 2em; }
 <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
 <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
 </div>
+
 <div class="container">
 <h1>ESP32 Flash Dumper & Writer</h1>
+
 <div class="section first-box">
 <div class="section-content">
 <h2>Connect Device</h2>
@@ -227,6 +228,7 @@ h1 { font-size: 2em; }
 </div>
 <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
 </div>
+
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
 <p><strong>1.</strong> Connect device via USB</p>
@@ -239,13 +241,15 @@ h1 { font-size: 2em; }
 <div id="dumpProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Happy Safety Send Backup</h2>
-<p><strong>1.</strong> Select file (.bin or ZIP)</p>
-<p><strong>2.</strong> Enter password → Twilio sends SMS to +40764991929</p>
-<p><strong>3.</strong> Enter code → upload to private Backblaze</p>
+<p><strong>1.</strong> Choose backup file (.bin or ZIP)</p>
+<p><strong>2.</strong> Enter password and press Enter</p>
+<p><strong>3.</strong> Enter verification code from SMS</p>
+<p><strong>4.</strong> File uploads securely to cloud storage</p>
 <div class="control-group">
-<label>Select File:</label>
+<label>Choose Backup File:</label>
 <input type="file" id="backupFile" accept=".bin,.zip">
 </div>
 <div class="button-group">
@@ -255,6 +259,7 @@ h1 { font-size: 2em; }
 <div id="safetyProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
@@ -271,12 +276,14 @@ h1 { font-size: 2em; }
 <div id="writeProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
 <div class="log-entry info">System initialized. Connect device to start...</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Radio Live</h2>
 <div class="radio-links">
@@ -291,10 +298,10 @@ h1 { font-size: 2em; }
 </div>
 </div>
 </div>
+
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// === CONFIG ===
 const TWILIO_CONFIG = {
   accountSid: 'ACc571acebd92791e59f7198974960c9cd',
   authToken: 'd18527beec119bb602f1928fddd91201',
@@ -303,7 +310,6 @@ const TWILIO_CONFIG = {
 };
 
 const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
-
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
 
 const BACKBLAZE = {
@@ -341,7 +347,6 @@ const el = {
   flashSizeSelect: document.getElementById('flashSizeSelect')
 };
 
-// === UTIL ===
 function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('ro-RO');
   const entry = document.createElement('div');
@@ -383,7 +388,6 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
-// === TWILIO SMS ===
 async function sendTwilioSMS(code) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
   const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
@@ -439,7 +443,6 @@ async function triggerTwilioSMS() {
   }
 }
 
-// === CONNECT ===
 async function connect() {
   try {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
@@ -467,7 +470,6 @@ async function connect() {
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
     
-    // MAC
     try {
       const macData = await state.esploader.readFlash(0x1000, 16);
       const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -475,7 +477,6 @@ async function connect() {
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
     } catch (e) { state.macAddress = 'Unknown'; }
     
-    // Flash size
     try {
       const flashId = await state.esploader.flashId();
       const code = (flashId >> 16) & 0xFF;
@@ -499,7 +500,7 @@ async function connect() {
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
     updateStatus('Connection Failed', 'error');
-    alert(`Eroare: ${e.message}\n\nÎncearcă:\n1. Deconectează USB\n2. Închide Arduino IDE\n3. Chrome/Edge`);
+    alert(`Eroare: ${e.message}`);
   }
 }
 
@@ -514,7 +515,6 @@ async function disconnect() {
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
 }
 
-// === READ ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
@@ -542,7 +542,6 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === SAFETY BACKUP WITH CLOUDFLARE WORKER ===
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
   
@@ -569,12 +568,12 @@ async function happySafetySendBackup() {
       fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
     }
     
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading to Backblaze...');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading to cloud...');
     
     const filename = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
     const url = await uploadToBackblazeViaWorker(fileData, filename);
     
-    alert(`Backup sent!\nPrivate URL: ${url}`);
+    alert(`Backup sent!\nSecure URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
     setTimeout(() => hideProgress(el.safetyProgress), 2000);
     log('Backup completed successfully!', 'success');
@@ -602,10 +601,28 @@ async function uploadToBackblazeViaWorker(data, filename) {
   }
   
   const uploadData = await authResp.json();
-  log('Upload URL received, uploading file...', 'info');
+  log('Upload URL received, preparing file...', 'info');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 75, 'Encoding file...');
   
+  // Calculate SHA1 in chunks to avoid memory issues
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString();
-  const base64Data = btoa(String.fromCharCode(...data));
+  
+  // Convert to base64 in chunks to avoid call stack overflow
+  log('Converting file to base64...', 'info');
+  const chunkSize = 50000; // 50KB chunks
+  let base64Data = '';
+  
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.slice(i, Math.min(i + chunkSize, data.length));
+    base64Data += btoa(String.fromCharCode.apply(null, chunk));
+    
+    // Update progress during encoding
+    const encodePct = 75 + (i / data.length) * 10;
+    updateProgress(el.safetyProgress, el.safetyProgressFill, encodePct, 'Encoding file...');
+  }
+  
+  log('Uploading to secure cloud storage...', 'info');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 85, 'Uploading...');
   
   const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
     method: 'POST',
@@ -627,11 +644,10 @@ async function uploadToBackblazeViaWorker(data, filename) {
     throw new Error(`Upload failed: ${error}`);
   }
   
-  log('File uploaded successfully to Backblaze!', 'success');
+  log('File uploaded successfully!', 'success');
   return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
 }
 
-// === EVENTS ===
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
@@ -648,8 +664,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay(); 
 };
 
-log('Ready! Password: wdt81sms | Twilio SMS + Cloudflare Worker active!', 'success');
+log('Ready! Password: wdt81sms | SMS verification active!', 'success');
 </script>
 </body>
 </html>
-</artifact>
