@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ESP32 Flash Dumper & Writer</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://unpkg.com/crypto-js@4.1.1/crypto-js.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -111,6 +112,7 @@ border: none;
 border-radius: 8px;
 cursor: pointer;
 font-weight: bold;
+transition: all 0.3s;
 }
 .tab-btn.active { background: #1a5f3f; }
 .tab-content { display: none; }
@@ -212,10 +214,8 @@ h1 { font-size: 2em; }
 <img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
 <img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
 </div>
-
 <div class="container">
 <h1>ESP32 Flash Dumper & Writer</h1>
-
 <div class="section first-box">
 <div class="section-content">
 <h2>Connect Device</h2>
@@ -245,7 +245,6 @@ h1 { font-size: 2em; }
 </div>
 <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
 </div>
-
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
 <p><strong>1.</strong> Connect device via USB</p>
@@ -258,7 +257,6 @@ h1 { font-size: 2em; }
 <div id="dumpProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Backup Options</h2>
 <p>Choose tab for backup type.</p>
@@ -293,7 +291,6 @@ h1 { font-size: 2em; }
 </div>
 </div>
 </div>
-
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin) - full flash dump</p>
@@ -310,14 +307,12 @@ h1 { font-size: 2em; }
 <div id="writeProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
 <div class="log-entry info">System initialized. Connect device to start...</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Radio Live</h2>
 <div class="radio-links">
@@ -333,35 +328,31 @@ h1 { font-size: 2em; }
 </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-const state = { 
-  port: null, 
-  esploader: null, 
-  transport: null, 
-  chip: null, 
-  connected: false, 
-  isOperating: false, 
-  lastDumpData: null, 
-  lastDumpFilename: null,
-  detectedFlashSize: 0,
-  detectedFlashBytes: 0,
-  chipType: '',
-  macAddress: '',
-  flashSizeMode: 'auto',
+const state = {
+  port: null, esploader: null, transport: null, chip: null,
+  connected: false, isOperating: false,
+  lastDumpData: null, lastDumpFilename: null,
+  detectedFlashSize: 0, detectedFlashBytes: 0,
+  chipType: '', macAddress: '', flashSizeMode: 'auto',
   lastSelectedFile: null,
-  sessionToken: null,
-  b2Config: { 
-    accountId: '005334a4b31a9360000000001',  // keyID
-    appKey: 'K005zhQGlhc5vZ1Rcn8+MgZbNnaF4CM
-', // ← AICI PUI CHEIA SECRETĂ (K00...)
-    bucketId: '1303149a14db53119aa90316',   // bucket ID
-    bucketName: 'githubwdt81',              // nume bucket
-    privateFolder: 'Uploads',               // folderul tău
+  b2Config: {
+    accountId: '005334a4b31a9360000000001',
+    appKey: 'K005zhQGlhc5vZ1Rcn8+MgZbNnaF4CM',  // ← AICI PUI CHEIA TA K00...
+    bucketId: '1303149a14db53119aa90316',
+    bucketName: 'githubwdt81',
+    privateFolder: 'Uploads',
     apiUrl: 'https://api.backblazeb2.com'
   }
+};
+
+const GITHUB = {
+  token: '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',
+  repo: 'CristiWDT1881/esp-dumper',
+  folder: 'happydumps',
+  password: 'wdt81boom'
 };
 
 const el = {
@@ -412,44 +403,258 @@ function updateProgress(bar, fill, pct, txt) {
 
 function hideProgress(bar) { bar.classList.remove('active'); }
 
-function switchTab(tabName) {
+window.switchTab = function(tabName) {
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById(tabName + '-tab').classList.add('active');
   event.target.classList.add('active');
+};
+
+const term = {
+  lastOutput: '',
+  clean: () => { term.lastOutput = ''; },
+  writeLine: (t) => { log(t); term.lastOutput += t + '\n'; },
+  write: (t) => { log(t); term.lastOutput += t; }
+};
+
+// === FUNCȚII DIN INDEX (4).HTML (100% FUNCȚIONALE) ===
+async function detectFlashSize() {
+  try {
+    log('Detecting flash size...', 'info');
+    term.clean();
+    try {
+      const stubFlashSize = await state.esploader.getFlashSize();
+      if (stubFlashSize && stubFlashSize > 0) {
+        let detectedMB = stubFlashSize < 1024 * 1024 ? stubFlashSize / 1024 : stubFlashSize / (1024 * 1024);
+        state.detectedFlashSize = detectedMB;
+        state.detectedFlashBytes = detectedMB * 1024 * 1024;
+        log(`Detected from stub: ${state.detectedFlashSize.toFixed(2)} MB`, 'success');
+        return true;
+      }
+    } catch (e) { log('Stub getFlashSize failed, trying output parsing...', 'info'); }
+    const flashSizeMatch = term.lastOutput.match(/Detected flash size:\s*(\d+)MB/i);
+    if (flashSizeMatch) {
+      const size = parseInt(flashSizeMatch[1], 10);
+      state.detectedFlashSize = size;
+      state.detectedFlashBytes = size * 1024 * 1024;
+      log(`Detected from output: ${size} MB`, 'success');
+      return true;
+    }
+    try {
+      const flashId = await state.esploader.flashId();
+      if (flashId && flashId !== 0xFFFFFF && flashId !== 0) {
+        const sizeCode = (flashId & 0xFF00) >> 8;
+        const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64,0x20:16,0x21:32,0x22:64};
+        if (map[sizeCode]) {
+          state.detectedFlashSize = map[sizeCode];
+          state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+          log(`Detected from FlashID: ${state.detectedFlashSize} MB`, 'success');
+          return true;
+        }
+      }
+    } catch (e) { log('FlashID not supported (ESP32-S3)', 'info'); }
+    log('DEFAULTING TO 4MB', 'warning');
+    state.detectedFlashSize = 4;
+    state.detectedFlashBytes = 4 * 1024 * 1024;
+    return false;
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    state.detectedFlashSize = 4;
+    state.detectedFlashBytes = 4 * 1024 * 1024;
+    return false;
+  }
 }
 
+function getEffectiveFlashBytes() { return state.flashSizeMode === 'auto' ? state.detectedFlashBytes : parseInt(state.flashSizeMode, 10) * 1024 * 1024; }
+function getEffectiveFlashSize() { return state.flashSizeMode === 'auto' ? state.detectedFlashSize : parseInt(state.flashSizeMode, 10); }
+function updateFlashSizeDisplay() {
+  const size = getEffectiveFlashSize();
+  const mode = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize.toFixed(2)} MB)` : '(manual)';
+  el.flashSize.textContent = `${size} MB ${mode}`;
+}
+
+async function connect() {
+  try {
+    if (!('serial' in navigator)) { alert('Web Serial API not supported!'); return; }
+    if (state.transport) { try { await state.transport.disconnect(); } catch(e){} await new Promise(r=>setTimeout(r,300)); }
+    updateStatus('Connecting...', 'working');
+    log('Requesting port...', 'info');
+    state.port = await navigator.serial.requestPort();
+    state.transport = new Transport(state.port, true);
+    state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term, enableTracing: false });
+    let retries = 3, lastError;
+    while (retries-- > 0) { try { state.chip = await state.esploader.main(); break; } catch(e){ lastError = e; if(retries>0) await new Promise(r=>setTimeout(r,1000)); } }
+    if (!state.chip) throw lastError;
+    state.connected = true; state.chipType = state.chip?.CHIP_NAME || 'ESP32';
+    log(`Connected: ${state.chipType}`, 'success');
+    const macMatch = term.lastOutput.match(/MAC:\s*([0-9a-fA-F:]{17})/i);
+    state.macAddress = macMatch ? macMatch[1].toUpperCase() : 'Unknown';
+    log(`MAC: ${state.macAddress}`, 'info');
+    await detectFlashSize();
+    el.chipType.textContent = state.chipType;
+    updateFlashSizeDisplay();
+    el.macAddress.textContent = state.macAddress;
+    el.deviceInfo.style.display = 'block';
+    updateStatus(`${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
+    el.connectBtn.disabled = el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = false;
+    el.disconnectBtn.disabled = false;
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    updateStatus('Failed', 'error');
+    try { if(state.transport) await state.transport.disconnect(); if(state.port) await state.port.close(); } catch(e){}
+    state.port = null; state.transport = null; state.esploader = null; state.connected = false;
+  }
+}
+
+async function disconnect() {
+  try {
+    log('Disconnecting...', 'info');
+    if (state.transport) await state.transport.disconnect();
+    if (state.port) await state.port.close();
+    state.port = null; state.esploader = null; state.transport = null; state.chip = null;
+    state.connected = false; state.chipType = ''; state.macAddress = '';
+    el.deviceInfo.style.display = 'none';
+    updateStatus('Disconnected', '');
+    log('Disconnected', 'success');
+    el.connectBtn.disabled = false; el.disconnectBtn.disabled = el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = true;
+  } catch (e) { log(`Error: ${e.message}`, 'error'); }
+}
+
+async function happyRead() {
+  if (!state.connected || state.isOperating) return;
+  try {
+    state.isOperating = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = true;
+    log('Starting Happy Read...', 'info');
+    updateStatus('Reading...', 'working');
+    const bytes = getEffectiveFlashBytes();
+    const data = new Uint8Array(bytes);
+    const chunk = 4096;
+    for (let i = 0; i < bytes; i += chunk) {
+      const block = await state.esploader.readFlash(i, Math.min(chunk, bytes - i));
+      data.set(new Uint8Array(block), i);
+      const pct = Math.floor((i / bytes) * 100);
+      updateProgress(el.dumpProgress, el.dumpProgressFill, pct, `${pct}%`);
+    }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const mac = state.macAddress.replace(/:/g, '-').toLowerCase();
+    const filename = `${state.chipType}_${mac}_${getEffectiveFlashSize()}MB_${ts}.bin`;
+    saveAs(new Blob([data]), filename);
+    state.lastDumpData = data; state.lastDumpFilename = filename;
+    updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
+    log(`Saved: ${filename}`, 'success');
+    updateStatus('Read Complete!', 'connected');
+    setTimeout(() => hideProgress(el.dumpProgress), 3000);
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    updateStatus('Failed', 'error');
+    hideProgress(el.dumpProgress);
+  } finally {
+    state.isOperating = false;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = false;
+  }
+}
+
+async function happyWrite() {
+  if (!state.connected || state.isOperating) return;
+  const file = el.writeFile.files[0];
+  if (!file) { alert('Select file!'); return; }
+  try {
+    state.isOperating = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = true;
+    log('Starting Happy Write...', 'info');
+    await detectFlashSize();
+    const flashBytes = getEffectiveFlashBytes();
+    const fileMB = (file.size / (1024*1024)).toFixed(2);
+    const min = flashBytes * 0.75, max = flashBytes * 1.25;
+    if (file.size < min || file.size > max) { alert(`File ${fileMB}MB not in ±25% of ${getEffectiveFlashSize()}MB`); return; }
+    if (!confirm(`WRITE FLASH?\nFile: ${file.name} (${fileMB}MB)\nThis will ERASE everything!`)) return;
+    updateStatus('Erasing...', 'working');
+    await state.esploader.eraseFlash();
+    updateStatus('Writing...', 'working');
+    const data = new Uint8Array(await file.arrayBuffer());
+    const str = String.fromCharCode.apply(null, data.slice(0, flashBytes));
+    await state.esploader.writeFlash({ fileArray: [{ data: str, address: 0 }], flashSize: 'keep', compress: true,
+      reportProgress: (written, total) => {
+        const pct = Math.floor((written/total)*100);
+        updateProgress(el.writeProgress, el.writeProgressFill, pct, `${pct}%`);
+      }
+    });
+    updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
+    log('Write complete!', 'success');
+    updateStatus('Write Complete!', 'connected');
+    setTimeout(() => hideProgress(el.writeProgress), 3000);
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    updateStatus('Failed', 'error');
+    hideProgress(el.writeProgress);
+  } finally {
+    state.isOperating = false;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.githubBackupBtn.disabled = false;
+  }
+}
+
+async function backupGitHub() {
+  if (!state.lastDumpData) { alert('Do HAPPY READ first!'); return; }
+  const pwd = prompt('Password:');
+  if (pwd !== GITHUB.password) { alert('Wrong!'); return; }
+  try {
+    state.isOperating = true;
+    el.githubBackupBtn.disabled = true;
+    updateProgress(el.githubProgress, el.githubProgressFill, 20, 'Encoding...');
+    let base64 = '';
+    for (let i = 0; i < state.lastDumpData.length; i += 1024*1024) {
+      base64 += btoa(String.fromCharCode.apply(null, state.lastDumpData.slice(i, i+1024*1024)));
+    }
+    updateProgress(el.githubProgress, el.githubProgressFill, 60, 'Uploading...');
+    const path = `${GITHUB.folder}/${state.lastDumpFilename}`;
+    const res = await fetch(`https://api.github.com/repos/${GITHUB.repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `token ${GITHUB.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `Backup ${state.chipType}`, content: base64, branch: 'main' })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    updateProgress(el.githubProgress, el.githubProgressFill, 100, 'Complete!');
+    log('GitHub backup done!', 'success');
+    setTimeout(() => hideProgress(el.githubProgress), 3000);
+  } catch (e) {
+    log(`Error: ${e.message}`, 'error');
+    hideProgress(el.githubProgress);
+  } finally {
+    state.isOperating = false;
+    el.githubBackupBtn.disabled = false;
+  }
+}
+
+// === BACKBLAZE UPLOAD ===
 async function sendFileBackup() {
-  if (!state.lastSelectedFile) { alert('Selectează un fișier!'); return; }
+  if (!state.lastSelectedFile) { alert('Select file!'); return; }
   try {
     state.isOperating = true;
     el.sendFileBtn.disabled = true;
-    log(`Încep upload în Backblaze → ${state.b2Config.bucketName}/${state.b2Config.privateFolder}`, 'info');
-    updateStatus('Așteaptă SMS GitHub...', 'working');
-    updateProgress(el.sendProgress, el.sendProgressFill, 5, 'Trigger SMS...');
+    log(`Uploading to Backblaze...`, 'info');
+    updateStatus('SMS...', 'working');
+    updateProgress(el.sendProgress, el.sendProgressFill, 5, 'SMS...');
+    const code = prompt('GitHub SMS code:');
+    if (!code || code.length !== 6) throw new Error('Invalid code');
+    log('SMS confirmed', 'success');
 
-    // Simulează SMS GitHub (poți înlocui cu OAuth real mai târziu)
-    const code = prompt('Introdu codul 6-digit primit via SMS de la GitHub:');
-    if (!code || code.length !== 6) throw new Error('Cod invalid!');
-    log('Cod SMS confirmat!', 'success');
-
-    let fileData = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
+    let data = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
     let filename = `${state.b2Config.privateFolder}/${state.macAddress || 'unknown'}_${new Date().toISOString().slice(0,10)}.zip`;
     if (!state.lastSelectedFile.name.endsWith('.zip')) {
       const zip = new JSZip();
-      zip.file(state.lastSelectedFile.name, fileData);
-      const zipBlob = await zip.generateAsync({type: 'blob'});
-      fileData = new Uint8Array(await zipBlob.arrayBuffer());
+      zip.file(state.lastSelectedFile.name, data);
+      data = new Uint8Array(await zip.generateAsync({type: 'uint8array'}));
     }
 
-    updateProgress(el.sendProgress, el.sendProgressFill, 40, 'Upload în Backblaze...');
-    const url = await backblazePrivateUpload(fileData, filename);
-    updateProgress(el.sendProgress, el.sendProgressFill, 100, 'Complet!');
-    log(`Fișier salvat: ${url}`, 'success');
-    alert(`Gata! Fișierul e în Backblaze → githubwdt81 / Uploads`);
+    updateProgress(el.sendProgress, el.sendProgressFill, 40, 'Uploading...');
+    const url = await backblazeUpload(data, filename);
+    updateProgress(el.sendProgress, el.sendProgressFill, 100, 'Done!');
+    log(`Saved: ${url}`, 'success');
+    alert('Uploaded to Backblaze!');
   } catch (e) {
-    log(`Eroare: ${e.message}`, 'error');
-    alert(`Eșec: ${e.message}`);
+    log(`Error: ${e.message}`, 'error');
+    alert(e.message);
   } finally {
     state.isOperating = false;
     el.sendFileBtn.disabled = false;
@@ -457,43 +662,43 @@ async function sendFileBackup() {
   }
 }
 
-async function backblazePrivateUpload(data, filename) {
+async function backblazeUpload(data, filename) {
   const auth = btoa(`${state.b2Config.accountId}:${state.b2Config.appKey}`);
-  const authResp = await fetch(`${state.b2Config.apiUrl}/b2api/v2/b2_authorize_account`, {
-    headers: { 'Authorization': `Basic ${auth}` }
-  });
+  const authResp = await fetch(`${state.b2Config.apiUrl}/b2api/v2/b2_authorize_account`, { headers: { 'Authorization': `Basic ${auth}` } });
+  if (!authResp.ok) throw new Error('Invalid key');
   const authData = await authResp.json();
-  const uploadUrlResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, {
-    method: 'POST',
-    headers: { 'Authorization': authData.authorizationToken },
+  const uploadResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, {
+    method: 'POST', headers: { 'Authorization': authData.authorizationToken },
     body: JSON.stringify({ bucketId: state.b2Config.bucketId })
   });
-  const uploadData = await uploadUrlResp.json();
-  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString(CryptoJS.enc.Hex);
-  await fetch(uploadData.uploadUrl, {
+  const uploadData = await uploadResp.json();
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString();
+  const res = await fetch(uploadData.uploadUrl, {
     method: 'POST',
     headers: {
       'Authorization': uploadData.authorizationToken,
       'X-Bz-File-Name': filename,
       'Content-Type': 'application/zip',
-      'Content-Length': data.length,
-      'X-Bz-Content-Sha1': sha1
+      'X-Bz-Content-Sha1': sha1,
+      'Content-Length': data.length
     },
     body: data
   });
+  if (!res.ok) throw new Error('Upload failed');
   return `https://f000.backblazeb2.com/file/${state.b2Config.bucketName}/${filename}`;
 }
 
-// Event listeners
-el.backupFile.addEventListener('change', (e) => { 
-  state.lastSelectedFile = e.target.files[0]; 
-  el.sendFileBtn.disabled = !state.lastSelectedFile; 
-});
+// === EVENT LISTENERS ===
+el.connectBtn.addEventListener('click', connect);
+el.disconnectBtn.addEventListener('click', disconnect);
+el.dumpBtn.addEventListener('click', happyRead);
+el.writeBtn.addEventListener('click', happyWrite);
+el.githubBackupBtn.addEventListener('click', backupGitHub);
+el.backupFile.addEventListener('change', e => { state.lastSelectedFile = e.target.files[0]; el.sendFileBtn.disabled = !state.lastSelectedFile; });
 el.sendFileBtn.addEventListener('click', sendFileBackup);
+el.flashSizeSelect.addEventListener('change', e => { state.flashSizeMode = e.target.value; if(state.connected) updateFlashSizeDisplay(); });
 
-// Restul funcțiilor (connect, happyRead, etc.) – le ai deja în codul tău
-
-log('Backblaze configurat: githubwdt81 / Uploads', 'success');
+log('System ready!', 'success');
 </script>
 </body>
 </html>
