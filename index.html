@@ -310,7 +310,7 @@ const TWILIO_CONFIG = {
 };
 
 const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
-const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
+const SAFETY_PASSWORD_HASH = 'f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b';
 
 const BACKBLAZE = {
   bucketName: 'githubwdt81',
@@ -545,7 +545,13 @@ async function happyRead() {
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
   
-  const pwd = prompt('Enter password:');
+  // Create secure password dialog with masked input
+  const pwd = await showPasswordDialog();
+  if (!pwd) {
+    log('Password entry cancelled', 'warning');
+    return;
+  }
+  
   if (!verifyPassword(pwd)) {
     log('Wrong password!', 'error');
     return alert('Wrong password!');
@@ -560,18 +566,17 @@ async function happySafetySendBackup() {
     
     updateProgress(el.safetyProgress, el.safetyProgressFill, 60, 'Preparing file...');
     
+    // Read file as-is, no conversion
     let fileData = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
     
-    if (!state.lastSelectedFile.name.endsWith('.zip')) {
-      const zip = new JSZip();
-      zip.file(state.lastSelectedFile.name, fileData);
-      fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
-    }
+    // Determine file extension
+    const fileName = state.lastSelectedFile.name;
+    const fileExt = fileName.substring(fileName.lastIndexOf('.'));
     
     updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading to cloud...');
     
-    const filename = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
-    const url = await uploadToBackblazeViaWorker(fileData, filename);
+    const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}${fileExt}`;
+    const url = await uploadToBackblazeViaWorker(fileData, uploadFileName);
     
     alert(`Backup sent!\nSecure URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
@@ -584,6 +589,104 @@ async function happySafetySendBackup() {
     state.isOperating = false; 
     el.safetyBackupBtn.disabled = false;
   }
+}
+
+function showPasswordDialog() {
+  return new Promise((resolve) => {
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    `;
+    
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      background: #B3D9F2;
+      padding: 30px;
+      border-radius: 15px;
+      border: 4px solid #5B9BD5;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      max-width: 400px;
+      width: 90%;
+    `;
+    
+    dialog.innerHTML = `
+      <h3 style="color: #1a5f3f; margin-bottom: 20px; text-align: center;">Enter Password</h3>
+      <input type="password" id="pwdInput" style="
+        width: 100%;
+        padding: 12px;
+        font-size: 1.1em;
+        border: 3px solid #5B9BD5;
+        border-radius: 8px;
+        box-sizing: border-box;
+        margin-bottom: 15px;
+      " placeholder="Password">
+      <div style="display: flex; gap: 10px;">
+        <button id="pwdOk" style="
+          flex: 1;
+          padding: 12px;
+          font-size: 1.1em;
+          font-weight: bold;
+          background: #1a5f3f;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+        ">OK</button>
+        <button id="pwdCancel" style="
+          flex: 1;
+          padding: 12px;
+          font-size: 1.1em;
+          font-weight: bold;
+          background: #6c757d;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+        ">Cancel</button>
+      </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const input = document.getElementById('pwdInput');
+    const okBtn = document.getElementById('pwdOk');
+    const cancelBtn = document.getElementById('pwdCancel');
+    
+    input.focus();
+    
+    const cleanup = () => document.body.removeChild(overlay);
+    
+    okBtn.onclick = () => {
+      const pwd = input.value;
+      cleanup();
+      resolve(pwd);
+    };
+    
+    cancelBtn.onclick = () => {
+      cleanup();
+      resolve(null);
+    };
+    
+    input.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        const pwd = input.value;
+        cleanup();
+        resolve(pwd);
+      }
+    };
+  });
 }
 
 async function uploadToBackblazeViaWorker(data, filename) {
@@ -602,27 +705,38 @@ async function uploadToBackblazeViaWorker(data, filename) {
   
   const uploadData = await authResp.json();
   log('Upload URL received, preparing file...', 'info');
-  updateProgress(el.safetyProgress, el.safetyProgressFill, 75, 'Encoding file...');
   
-  // Calculate SHA1 in chunks to avoid memory issues
+  const fileSizeMB = (data.length / 1024 / 1024).toFixed(2);
+  log(`File size: ${fileSizeMB} MB`, 'info');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 75, `Processing ${fileSizeMB} MB...`);
+  
+  // Calculate SHA1
+  log('Calculating file hash...', 'info');
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString();
   
-  // Convert to base64 in chunks to avoid call stack overflow
+  // Convert to base64 in optimized chunks for large files
   log('Converting file to base64...', 'info');
-  const chunkSize = 50000; // 50KB chunks
+  const chunkSize = 1024 * 1024; // 1MB chunks for better performance with large files
   let base64Data = '';
   
   for (let i = 0; i < data.length; i += chunkSize) {
     const chunk = data.slice(i, Math.min(i + chunkSize, data.length));
-    base64Data += btoa(String.fromCharCode.apply(null, chunk));
+    
+    // Convert chunk to binary string properly
+    let binaryString = '';
+    for (let j = 0; j < chunk.length; j++) {
+      binaryString += String.fromCharCode(chunk[j]);
+    }
+    base64Data += btoa(binaryString);
     
     // Update progress during encoding
     const encodePct = 75 + (i / data.length) * 10;
-    updateProgress(el.safetyProgress, el.safetyProgressFill, encodePct, 'Encoding file...');
+    const processedMB = (i / 1024 / 1024).toFixed(1);
+    updateProgress(el.safetyProgress, el.safetyProgressFill, encodePct, `Encoding ${processedMB}/${fileSizeMB} MB...`);
   }
   
   log('Uploading to secure cloud storage...', 'info');
-  updateProgress(el.safetyProgress, el.safetyProgressFill, 85, 'Uploading...');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 85, `Uploading ${fileSizeMB} MB...`);
   
   const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
     method: 'POST',
@@ -644,7 +758,7 @@ async function uploadToBackblazeViaWorker(data, filename) {
     throw new Error(`Upload failed: ${error}`);
   }
   
-  log('File uploaded successfully!', 'success');
+  log(`File uploaded successfully! (${fileSizeMB} MB)`, 'success');
   return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
 }
 
@@ -664,7 +778,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay(); 
 };
 
-log('Ready! Password: wdt81sms | SMS verification active!', 'success');
+log('Ready! Password: wdt81smsx | SMS verification active!', 'success');
 </script>
 </body>
 </html>
