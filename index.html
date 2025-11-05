@@ -309,12 +309,11 @@ const TWILIO_CONFIG = {
   toPhone: '+40764991929'
 };
 
+const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
+
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
 
 const BACKBLAZE = {
-  accountId: '005334a4b31a9360000000001',
-  appKey: 'K005zhQGlhc5vZ1Rcn8+MgZbNnaF4CM',
-  bucketId: '1303149a14db53119aa90316',
   bucketName: 'githubwdt81',
   folder: 'Uploads'
 };
@@ -550,7 +549,7 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === SAFETY BACKUP ===
+// === SAFETY BACKUP WITH CLOUDFLARE WORKER ===
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
   
@@ -577,10 +576,10 @@ async function happySafetySendBackup() {
       fileData = new Uint8Array(await zip.generateAsync({type: 'blob'}).then(b => b.arrayBuffer()));
     }
     
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading...');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Uploading to Backblaze...');
     
     const filename = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.zip`;
-    const url = await uploadToBackblaze(fileData, filename);
+    const url = await uploadToBackblazeViaWorker(fileData, filename);
     
     alert(`Backup sent!\nPrivate URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
@@ -595,33 +594,47 @@ async function happySafetySendBackup() {
   }
 }
 
-async function uploadToBackblaze(data, filename) {
-  const auth = btoa(`${BACKBLAZE.accountId}:${BACKBLAZE.appKey}`);
-  const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', { 
-    headers: { Authorization: `Basic ${auth}` } 
-  });
-  const authData = await authResp.json();
+async function uploadToBackblazeViaWorker(data, filename) {
+  log('Getting upload URL from Cloudflare Worker...', 'info');
   
-  const uploadResp = await fetch(`${authData.apiUrl}/b2api/v2/b2_get_upload_url`, { 
-    method: 'POST', 
-    headers: { Authorization: authData.authorizationToken }, 
-    body: JSON.stringify({ bucketId: BACKBLAZE.bucketId }) 
+  const authResp = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'authorize' })
   });
-  const uploadData = await uploadResp.json();
+  
+  if (!authResp.ok) {
+    const error = await authResp.text();
+    throw new Error(`Worker authorization failed: ${error}`);
+  }
+  
+  const uploadData = await authResp.json();
+  log('Upload URL received, uploading file...', 'info');
   
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(data)).toString();
+  const base64Data = btoa(String.fromCharCode(...data));
   
-  await fetch(uploadData.uploadUrl, { 
-    method: 'POST', 
-    headers: { 
-      Authorization: uploadData.authorizationToken, 
-      'X-Bz-File-Name': filename, 
-      'Content-Type': 'application/zip', 
-      'X-Bz-Content-Sha1': sha1 
-    }, 
-    body: data 
+  const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'upload',
+      data: {
+        uploadUrl: uploadData.uploadUrl,
+        authToken: uploadData.authorizationToken,
+        fileName: filename,
+        sha1: sha1,
+        fileData: base64Data
+      }
+    })
   });
   
+  if (!uploadResp.ok) {
+    const error = await uploadResp.text();
+    throw new Error(`Upload failed: ${error}`);
+  }
+  
+  log('File uploaded successfully to Backblaze!', 'success');
   return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
 }
 
@@ -642,7 +655,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay(); 
 };
 
-log('Ready! Password: wdt81sms | Twilio SMS active!', 'success');
+log('Ready! Password: wdt81sms | Twilio SMS + Cloudflare Worker active!', 'success');
 </script>
 </body>
 </html>
