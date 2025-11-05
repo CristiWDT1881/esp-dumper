@@ -305,10 +305,10 @@ h1 { font-size: 2em; }
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
 // === CONFIG ===
-const GITHUB_OAUTH_CLIENT_ID = 'Ov23liZBdpOOO1aDBig2';
+const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
 
 // SHA256("wdt81sms") = 3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0
-const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
+const SAFETY_PASSWORD_HASH = '3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0';
 
 const BACKBLAZE = {
   accountId: '005334a4b31a9360000000001',
@@ -503,7 +503,7 @@ async function happySafetySendBackup() {
     state.isOperating = true; el.safetyBackupBtn.disabled = true;
     updateStatus('Triggering SMS...', 'working');
 
-    const smsCode = await triggerGitHubSMS();
+    const smsCode = await triggerTwilioSMS();
     if (!smsCode || smsCode.length !== 6) throw new Error('Invalid code');
 
     let fileData = new Uint8Array(await state.lastSelectedFile.arrayBuffer());
@@ -526,18 +526,49 @@ async function happySafetySendBackup() {
   }
 }
 
-async function triggerGitHubSMS() {
-  return new Promise(resolve => {
-    const authUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_OAUTH_CLIENT_ID}&scope=repo&redirect_uri=${encodeURIComponent(location.origin)}`;
-    const popup = window.open(authUrl, 'sms', 'width=600,height=700');
-    if (!popup) return resolve(prompt('Allow popup & enter SMS code:'));
-    const timer = setInterval(() => {
-      if (popup.closed) { clearInterval(timer); resolve(prompt('Enter SMS code:')); }
-    }, 500);
-    setTimeout(() => { clearInterval(timer); if (!popup.closed) popup.close(); resolve(prompt('Enter code:')); }, 90000);
+async 
+function triggerTwilioSMS() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const code = Math.floor(100000 + Math.random()*900000).toString();
+      // store code in session for this browser session (only for testing)
+      sessionStorage.setItem('esp_backup_sms_code', code);
+      const body = new URLSearchParams();
+      body.append('To', '+19156664089');
+      body.append('From', '+19156664089');
+      body.append('Body', 'Codul tău de validare este: ' + code);
+
+      // Note: Using Account SID and Auth Token in client-side code is insecure. This is only for testing.
+      const resp = await fetch('https://api.twilio.com/2010-04-01/Accounts/ACc571acebd92791e59f7198974960c9cd/Messages.json', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('ACc571acebd92791e59f7198974960c9cd:bd464d5ffbb3e2dafb4f37cd72d3d88f'),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: body.toString()
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        console.error('Twilio error:', resp.status, txt);
+        return reject(new Error('Failed to send SMS: ' + resp.status));
+      }
+
+      // Ask user to input the code (popup)
+      const userCode = prompt('Introdu codul trimis prin SMS:');
+      if (!userCode) return reject(new Error('No code entered'));
+      const expected = sessionStorage.getItem('esp_backup_sms_code');
+      if (userCode.trim() === expected) {
+        sessionStorage.removeItem('esp_backup_sms_code');
+        resolve(userCode.trim());
+      } else {
+        reject(new Error('Invalid code'));
+      }
+    } catch (e) {
+      reject(e);
+    }
   });
 }
-
 async function uploadToBackblaze(data, filename) {
   const auth = btoa(`${BACKBLAZE.accountId}:${BACKBLAZE.appKey}`);
   const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', { headers: { Authorization: `Basic ${auth}` } });
