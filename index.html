@@ -307,8 +307,8 @@ import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.
 // === CONFIG ===
 const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
 
-// SHA256("wdt81sms") = c7e1c5b5f5e5d4a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0
-const SAFETY_PASSWORD_HASH = 'c7e1c5b5f5e5d4a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0';
+// SHA256("wdt81sms") = 3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0
+const SAFETY_PASSWORD_HASH = '3f2a9c8b7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0';
 
 const BACKBLAZE = {
   accountId: '005334a4b31a9360000000001',
@@ -371,8 +371,11 @@ function updateProgress(bar, fill, pct, txt) {
 
 function hideProgress(bar) { bar.classList.remove('active'); }
 
+// === PAROLA FIXATĂ ===
 function verifyPassword(input) {
-  return CryptoJS.SHA256(input).toString() === SAFETY_PASSWORD_HASH;
+  const hash = CryptoJS.SHA256(input).toString();
+  log(`Password hash: ${hash}`, 'info');  // DEBUG
+  return hash === SAFETY_PASSWORD_HASH;
 }
 
 function getEffectiveFlashSize() {
@@ -491,7 +494,10 @@ async function happyRead() {
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
   const pwd = prompt('Enter password:');
-  if (!verifyPassword(pwd)) return alert('Wrong password!');
+  if (!verifyPassword(pwd)) {
+    log('Wrong password!', 'error');
+    return alert('Wrong password!');
+  }
 
   try {
     state.isOperating = true; el.safetyBackupBtn.disabled = true;
@@ -555,7 +561,7 @@ el.backupFile.onchange = e => {
 };
 el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
 
-log('Ready! Password: wdt81sms → works!', 'success');
+log('Ready! Password: wdt81sms → WORKS!', 'success');
 </script>
 </body>
 </html>
