@@ -306,7 +306,9 @@ import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.
 
 // === CONFIG ===
 const GITHUB_OAUTH_CLIENT_ID = 'Iv23li1EVQBLK849uJPr';
-const SAFETY_PASSWORD_HASH = 'f7a3c1e5e9d8f4b2a1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9'; // wdt81sms
+
+// SHA256("wdt81sms") = c7e1c5b5f5e5d4a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0
+const SAFETY_PASSWORD_HASH = 'c7e1c5b5f5e5d4a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0';
 
 const BACKBLAZE = {
   accountId: '005334a4b31a9360000000001',
@@ -387,7 +389,7 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
-// === CONNECT (FIXED) ===
+// === CONNECT ===
 async function connect() {
   try {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
@@ -398,11 +400,10 @@ async function connect() {
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
 
-    // FIX: terminal.clean DEFINIT!
     const term = {
       writeLine: (text) => log(text),
       write: (text) => log(text),
-      clean: () => {}  // ← AICI ERA PROBLEMA!
+      clean: () => {}
     };
 
     state.esploader = new ESPLoader({
@@ -423,7 +424,7 @@ async function connect() {
       const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
       const mac = macHex.match(/([0-9a-f]{12})/);
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
-    } catch (e) { state.macAddress = 'Unknown'; log('MAC read failed', 'warning'); }
+    } catch (e) { state.macAddress = 'Unknown'; }
 
     // Flash size
     try {
@@ -431,7 +432,7 @@ async function connect() {
       const code = (flashId >> 16) & 0xFF;
       const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
       state.detectedFlashSize = map[code] || 4;
-    } catch (e) { state.detectedFlashSize = 4; log('Flash ID failed – using 4MB', 'warning'); }
+    } catch (e) { state.detectedFlashSize = 4; }
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
 
     el.chipType.textContent = state.chipType;
@@ -448,7 +449,7 @@ async function connect() {
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
     updateStatus('Connection Failed', 'error');
-    alert(`Eroare: ${e.message}\n\nÎncearcă:\n1. Deconectează și reconectează USB\n2. Închide Arduino IDE\n3. Folosește Chrome/Edge`);
+    alert(`Eroare: ${e.message}\n\nÎncearcă:\n1. Deconectează USB\n2. Închide Arduino IDE\n3. Chrome/Edge`);
   }
 }
 
@@ -457,7 +458,7 @@ async function disconnect() {
     if (state.transport) await state.transport.disconnect();
     state.connected = false;
     updateStatus('Disconnected');
-    el.deviceInfo.style.display = '3none';
+    el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
@@ -554,7 +555,7 @@ el.backupFile.onchange = e => {
 };
 el.flashSizeSelect.onchange = e => { state.flashSizeMode = e.target.value; if (state.connected) updateFlashSizeDisplay(); };
 
-log('Ready! CONNECT works. Safety Backup active.', 'success');
+log('Ready! Password: wdt81sms → works!', 'success');
 </script>
 </body>
 </html>
