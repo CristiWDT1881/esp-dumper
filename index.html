@@ -156,36 +156,6 @@ line-height: 1.6;
 .log-entry.success { color: #51cf66; }
 .log-entry.warning { color: #ffd43b; }
 .log-entry.info { color: #74c0fc; }
-.radio-links {
-display: flex;
-justify-content: space-around;
-align-items: center;
-gap: 30px;
-flex-wrap: wrap;
-}
-.radio-link {
-display: flex;
-flex-direction: column;
-align-items: center;
-text-decoration: none;
-transition: transform 0.3s;
-}
-.radio-link:hover { transform: scale(1.1); }
-.radio-link img {
-width: 120px;
-height: 120px;
-border-radius: 15px;
-box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-margin-bottom: 10px;
-border: 4px solid #5B9BD5;
-}
-.radio-link span {
-color: #000;
-font-weight: bold;
-font-size: 1.1em;
-}
-
-/* === MULTI-FILE PROGRESS === */
 .file-progress-item {
 background: white;
 padding: 10px;
@@ -220,7 +190,34 @@ max-height: 300px;
 overflow-y: auto;
 margin-top: 10px;
 }
-
+.radio-links {
+display: flex;
+justify-content: space-around;
+align-items: center;
+gap: 30px;
+flex-wrap: wrap;
+}
+.radio-link {
+display: flex;
+flex-direction: column;
+align-items: center;
+text-decoration: none;
+transition: transform 0.3s;
+}
+.radio-link:hover { transform: scale(1.1); }
+.radio-link img {
+width: 120px;
+height: 120px;
+border-radius: 15px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+margin-bottom: 10px;
+border: 4px solid #5B9BD5;
+}
+.radio-link span {
+color: #000;
+font-weight: bold;
+font-size: 1.1em;
+}
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
 h1 { font-size: 2em; }
@@ -276,13 +273,11 @@ h1 { font-size: 2em; }
 </div>
 </div>
 
-<!-- === MULTI-FILE BACKUP === -->
 <div class="section">
 <h2>Happy Safety Send Backup (Multi-File)</h2>
 <p><strong>1.</strong> Choose backup files (multiple allowed)</p>
 <p><strong>2.</strong> Enter password and press Enter</p>
 <p><strong>3.</strong> Enter verification code from SMS</p>
-<p><strong>4.</strong> All files upload with ONE SMS!</p>
 <div class="control-group">
 <label>Choose Backup Files (multiple):</label>
 <input type="file" id="backupFiles" multiple>
@@ -342,12 +337,7 @@ const TWILIO_CONFIG = {
 };
 const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
-const BACKBLAZE = {
-  bucketName: 'githubwdt81',
-  folder: 'Uploads'
-};
-
-const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB per part (B2 large file API)
+const BACKBLAZE = { bucketName: 'githubwdt81', folder: 'Uploads' };
 
 const state = {
   port: null, esploader: null, transport: null, chip: null, connected: false,
@@ -547,7 +537,6 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === MULTI-FILE BACKUP ===
 async function happySafetySendBackup() {
   if (state.selectedFiles.length === 0) return alert('Select files!');
   
@@ -564,8 +553,6 @@ async function happySafetySendBackup() {
     if (!verified) throw new Error('SMS verification failed');
 
     log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
-    
-    // Clear previous progress
     el.fileListContainer.innerHTML = '';
     
     const results = [];
@@ -574,7 +561,6 @@ async function happySafetySendBackup() {
       const fileExt = file.name.substring(file.name.lastIndexOf('.'));
       const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
       
-      // Create progress UI for this file
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
       progressDiv.innerHTML = `
@@ -588,14 +574,13 @@ async function happySafetySendBackup() {
       try {
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`✓ ${file.name} uploaded!`, 'success');
+        log(`Success: ${file.name} uploaded!`, 'success');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
-        log(`✗ ${file.name} failed: ${e.message}`, 'error');
+        log(`Failed: ${file.name} - ${e.message}`, 'error');
       }
     }
     
-    // Show summary
     const successCount = results.filter(r => r.success).length;
     alert(`Upload complete!\n${successCount}/${results.length} files succeeded.`);
     log(`Batch upload complete: ${successCount}/${results.length}`, 'success');
@@ -609,10 +594,8 @@ async function happySafetySendBackup() {
   }
 }
 
-// === UPLOAD FUNCTION (LARGE FILE API) ===
 async function uploadFileToBackblaze(file, filename, fileIndex) {
   const progressFill = document.getElementById(`progress-${fileIndex}`);
-  
   const updateFileProgress = (pct, txt) => {
     if (progressFill) {
       progressFill.style.width = pct + '%';
@@ -620,20 +603,11 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     }
   };
 
-  // Calculate SHA1
-  const arrayBuffer = await file.arrayBuffer();
-  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-  
-  // Small file (<100MB) - single upload
-  if (file.size < CHUNK_SIZE) {
-    log(`Uploading ${file.name} (small file)...`, 'info');
-    
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-    
+  if (file.size < 10 * 1024 * 1024) {
+    const arrayBuffer = await file.arrayBuffer();
+    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
     updateFileProgress(50, 'Uploading...');
-    
     const resp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -644,81 +618,37 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
         sha1: sha1
       })
     });
-
     if (!resp.ok) throw new Error(await resp.text());
-    
     const { fileUrl } = await resp.json();
     updateFileProgress(100, 'Done!');
     return fileUrl;
-  } 
-  // Large file (>100MB) - chunked upload
-  else {
-    log(`Uploading ${file.name} (large file - chunked)...`, 'info');
-    
-    // 1. Start large file
-    const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
+  } else {
+    log(`Large file: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`, 'info');
+    const arrayBuffer = await file.arrayBuffer();
+    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
+    updateFileProgress(10, 'Getting upload URL...');
+    const presignResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'startLargeFile',
+        action: 'getPresignedUrl',
         fileName: filename,
-        contentType: file.type || 'application/octet-stream'
+        fileSize: file.size,
+        sha1: sha1
       })
     });
-    
-    if (!startResp.ok) throw new Error(await startResp.text());
-    const { fileId } = await startResp.json();
-    
-    // 2. Upload parts
-    const parts = [];
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    for (let partNum = 1; partNum <= totalChunks; partNum++) {
-      const start = (partNum - 1) * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = arrayBuffer.slice(start, end);
-      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(chunk)).toString();
-      
-      const chunkBase64 = btoa(
-        new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON
-        .stringify({
-          action: 'uploadPart',
-          fileId: fileId,
-          partNumber: partNum,
-          partBase64: chunkBase64,
-          sha1: chunkSha1
-        })
-      });
-      
-      if (!partResp.ok) throw new Error(await partResp.text());
-      const { partSha1 } = await partResp.json();
-      parts.push(partSha1);
-      
-      const progress = (partNum / totalChunks) * 100;
-      updateFileProgress(progress, `Part ${partNum}/${totalChunks}`);
-      log(`${file.name}: Part ${partNum}/${totalChunks} uploaded`, 'info');
-    }
-    
-    // 3. Finish large file
-    const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'finishLargeFile',
-        fileId: fileId,
-        partSha1Array: parts
-      })
+    if (!presignResp.ok) throw new Error(await presignResp.text());
+    const { uploadUrl, fileUrl } = await presignResp.json();
+    updateFileProgress(30, 'Uploading directly...');
+    const uploadResp = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-Bz-Content-Sha1': sha1
+      },
+      body: file
     });
-    
-    if (!finishResp.ok) throw new Error(await finishResp.text());
-    const { fileUrl } = await finishResp.json();
-    
+    if (!uploadResp.ok) throw new Error(`Upload failed: ${await uploadResp.text()}`);
     updateFileProgress(100, 'Complete!');
     return fileUrl;
   }
@@ -751,7 +681,6 @@ function showPasswordDialog() {
   });
 }
 
-// Events
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
@@ -770,7 +699,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Password: wdt81sms | Multi-file + Large File API enabled!', 'success');
+log('Ready! Multi-file backup + large files supported!', 'success');
 </script>
 </body>
 </html>
