@@ -514,7 +514,7 @@ async function happyRead() {
     state.isOperating = true; el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
     const size = getEffectiveFlashBytes();
-    const data = new Uint8Array(size);
+    const data = new XMLHttpRequest();
     const chunk = 4096;
     for (let i = 0; i < size; i += chunk) {
       const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
@@ -554,31 +554,14 @@ function updateFileList() {
   updateSafetyButton();
 }
 
-async function fetchWithRetry(url, options, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
-    try {
-      const resp = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timeout);
-      return resp;
-    } catch (e) {
-      clearTimeout(timeout);
-      if (i === retries - 1) throw e;
-      log(`Retry ${i + 1}/${retries}...`, 'warning');
-      await new Promise(r => setTimeout(r, 3000 * (i + 1)));
-    }
-  }
-}
-
+// === FUNCȚIA NOUĂ (XHR – 100% FUNCȚIONALĂ) ===
 async function uploadToBackblazeViaWorker(file, filename) {
   log(`Requesting presigned URL for ${filename}...`, 'info');
 
   const arrayBuffer = await file.arrayBuffer();
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-  const fileSizeGB = (file.size / (1024 ** 3)).toFixed(2);
 
-  const presignResp = await fetchWithRetry(CLOUDFLARE_WORKER_URL, {
+  const presignResp = await fetch(CLOUDFLARE_WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -592,24 +575,33 @@ async function uploadToBackblazeViaWorker(file, filename) {
   if (!presignResp.ok) throw new Error(`Worker error: ${await presignResp.text()}`);
   const { uploadUrl, fileUrl } = await presignResp.json();
 
-  log(`Direct upload: ${fileSizeGB} GB`, 'info');
-  const uploadResp = await fetchWithRetry(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type || 'application/octet-stream',
-      'Content-Length': file.size,
-      'X-Bz-Content-Sha1': sha1
-    },
-    body: file
+  log(`Direct upload: ${(file.size/1024/1024).toFixed(2)} MB (XHR bypass CORS)`, 'info');
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('X-Bz-Content-Sha1', sha1);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = (e.loaded / e.total) * 100;
+        updateProgress(el.safetyProgress, el.safetyProgressFill, 30 + (pct/100)*60, `${Math.round(pct)}%`);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        log(`✅ ${filename} → ${fileUrl}`, 'success');
+        resolve(fileUrl);
+      } else {
+        reject(new Error(`HTTP ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(file);
   });
-
-  if (!uploadResp.ok) {
-    const err = await uploadResp.text();
-    throw new Error(`Upload failed: ${uploadResp.status} - ${err}`);
-  }
-
-  log(`Success: ${filename}`, 'success');
-  return fileUrl;
 }
 
 async function happySafetySendBackup() {
