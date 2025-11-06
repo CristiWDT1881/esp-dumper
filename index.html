@@ -201,6 +201,10 @@ color: #000;
 font-weight: bold;
 font-size: 1.1em;
 }
+@media (max-width: 768px) {
+.header-images { flex-direction: column; align-items: center; gap: 15px; }
+h1 { font-size: 2em; }
+}
 </style>
 </head>
 <body>
@@ -239,7 +243,6 @@ font-size: 1.1em;
 </div>
 <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
 </div>
-
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
 <p><strong>1.</strong> Connect device via USB</p>
@@ -252,15 +255,14 @@ font-size: 1.1em;
 <div id="dumpProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Happy Safety Send Backup</h2>
 <p><strong>1.</strong> Choose one or more backup files (Ctrl+Click)</p>
 <p><strong>2.</strong> Enter password and press Enter</p>
-<p><strong>3.</strong> Enter verification code from SMS (1 SMS for all files)</p>
+<p><strong>3.</strong> Enter verification code from SMS (1 SMS for ALL files)</p>
 <p><strong>4.</strong> All files upload securely to cloud</p>
 <div class="control-group">
-<label>Choose Backup Files (multiple):</label>
+<label>Choose Backup Files:</label>
 <input type="file" id="backupFile" multiple>
 </div>
 <div id="fileList" class="file-list" style="display:none;"></div>
@@ -271,7 +273,6 @@ font-size: 1.1em;
 <div id="safetyProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
@@ -288,14 +289,12 @@ font-size: 1.1em;
 <div id="writeProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
 <div class="log-entry info">System initialized. Connect device to start...</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Radio Live</h2>
 <div class="radio-links">
@@ -310,7 +309,6 @@ font-size: 1.1em;
 </div>
 </div>
 </div>
-
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
@@ -397,6 +395,10 @@ function updateFlashSizeDisplay() {
   const size = getEffectiveFlashSize();
   const mode = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
   el.flashSize.textContent = `${size} MB ${mode}`;
+}
+
+function updateSafetyButton() {
+  el.safetyBackupBtn.disabled = state.selectedFiles.length === 0 || !state.connected;
 }
 
 async function sendTwilioSMS(code) {
@@ -501,7 +503,8 @@ async function disconnect() {
     updateStatus('Disconnected');
     el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = true;
+    updateSafetyButton();
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
 }
 
@@ -534,6 +537,7 @@ function updateFileList() {
   el.fileList.innerHTML = '';
   if (files.length === 0) {
     el.fileList.style.display = 'none';
+    updateSafetyButton();
     return;
   }
   el.fileList.style.display = 'block';
@@ -545,59 +549,25 @@ function updateFileList() {
     item.innerHTML = `<span>${file.name}</span><span>${(file.size / 1024 / 1024).toFixed(2)} MB</span>`;
     el.fileList.appendChild(item);
   });
-  const totalMB = (totalSize / 1024 / 1024).toFixed(2);
   const totalGB = (totalSize / (1024 ** 3)).toFixed(2);
   log(`${files.length} files selected (${totalGB} GB total)`, 'info');
   updateSafetyButton();
 }
 
-function updateSafetyButton() {
-  el.safetyBackupBtn.disabled = state.selectedFiles.length === 0 || !state.connected;
-}
-
-async function happySafetySendBackup() {
-  if (state.selectedFiles.length === 0) return alert('Select at least one file!');
-  const pwd = await showPasswordDialog();
-  if (!pwd) { log('Password entry cancelled', 'warning'); return; }
-  if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
-
-  try {
-    state.isOperating = true; el.safetyBackupBtn.disabled = true;
-    updateStatus('Verifying via SMS...', 'working');
-    const verified = await triggerTwilioSMS();
-    if (!verified) throw new Error('SMS verification failed');
-
-    const totalFiles = state.selectedFiles.length;
-    let uploaded = 0;
-    let failed = 0;
-
-    for (let i = 0; i < totalFiles; i++) {
-      const file = state.selectedFiles[i];
-      const fileExt = file.name.substring(file.name.lastIndexOf('.'));
-      const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
-      
-      try {
-        updateProgress(el.safetyProgress, el.safetyProgressFill, 30 + (i / totalFiles) * 60, `Uploading ${file.name}...`);
-        const url = await uploadToBackblazeViaWorker(file, uploadFileName);
-        uploaded++;
-        log(`Uploaded: ${file.name} → ${url}`, 'success');
-      } catch (e) {
-        failed++;
-        log(`Failed: ${file.name} - ${e.message}`, 'error');
-      }
+async function fetchWithRetry(url, options, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
+    try {
+      const resp = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeout);
+      return resp;
+    } catch (e) {
+      clearTimeout(timeout);
+      if (i === retries - 1) throw e;
+      log(`Retry ${i + 1}/${retries}...`, 'warning');
+      await new Promise(r => setTimeout(r, 3000 * (i + 1)));
     }
-
-    const msg = `Upload complete!\nUploaded: ${uploaded}\nFailed: ${failed}`;
-    alert(msg);
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
-    setTimeout(() => hideProgress(el.safetyProgress), 2000);
-    log('All uploads finished.', 'success');
-  } catch (e) {
-    log(`Backup error: ${e.message}`, 'error');
-    alert(`Error: ${e.message}`);
-  } finally {
-    state.isOperating = false;
-    updateSafetyButton();
   }
 }
 
@@ -622,7 +592,7 @@ async function uploadToBackblazeViaWorker(file, filename) {
   if (!presignResp.ok) throw new Error(`Worker error: ${await presignResp.text()}`);
   const { uploadUrl, fileUrl } = await presignResp.json();
 
-  log(`Direct upload starting: ${fileSizeGB} GB`, 'info');
+  log(`Direct upload: ${fileSizeGB} GB`, 'info');
   const uploadResp = await fetchWithRetry(uploadUrl, {
     method: 'PUT',
     headers: {
@@ -638,24 +608,55 @@ async function uploadToBackblazeViaWorker(file, filename) {
     throw new Error(`Upload failed: ${uploadResp.status} - ${err}`);
   }
 
-  log(`Success: ${filename} (${fileSizeGB} GB)`, 'success');
+  log(`Success: ${filename}`, 'success');
   return fileUrl;
 }
 
-async function fetchWithRetry(url, options, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
-    try {
-      const resp = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(timeout);
-      return resp;
-    } catch (e) {
-      clearTimeout(timeout);
-      if (i === retries - 1) throw e;
-      log(`Retry ${i + 1}/${retries}...`, 'warning');
-      await new Promise(r => setTimeout(r, 3000 * (i + 1)));
+async function happySafetySendBackup() {
+  if (state.selectedFiles.length === 0) return alert('Select at least one file!');
+
+  const pwd = await showPasswordDialog();
+  if (!pwd) { log('Password entry cancelled', 'warning'); return; }
+  if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
+
+  try {
+    state.isOperating = true;
+    el.safetyBackupBtn.disabled = true;
+    updateStatus('Verifying via SMS...', 'working');
+
+    const verified = await triggerTwilioSMS();
+    if (!verified) throw new Error('SMS verification failed');
+
+    const total = state.selectedFiles.length;
+    let uploaded = 0, failed = 0;
+
+    for (let i = 0; i < total; i++) {
+      const file = state.selectedFiles[i];
+      const ext = file.name.substring(file.name.lastIndexOf('.'));
+      const name = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${ext}`;
+
+      try {
+        updateProgress(el.safetyProgress, el.safetyProgressFill, 30 + (i / total) * 60, `Uploading ${file.name}...`);
+        const url = await uploadToBackblazeViaWorker(file, name);
+        uploaded++;
+        log(`✅ ${file.name} → ${url}`, 'success');
+      } catch (e) {
+        failed++;
+        log(`❌ ${file.name} - ${e.message}`, 'error');
+      }
     }
+
+    const msg = `Upload complete!\n✅ Uploaded: ${uploaded}\n❌ Failed: ${failed}`;
+    alert(msg);
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'All done!');
+    setTimeout(() => hideProgress(el.safetyProgress), 2000);
+    log('All uploads finished.', 'success');
+  } catch (e) {
+    log(`Backup error: ${e.message}`, 'error');
+    alert(`Error: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    updateSafetyButton();
   }
 }
 
@@ -686,18 +687,19 @@ function showPasswordDialog() {
   });
 }
 
-// Events
+// EVENTS
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
 el.backupFile.onchange = updateFileList;
+el.writeFile.onchange = () => el.writeBtn.disabled = !el.writeFile.files[0];
 el.flashSizeSelect.onchange = e => {
   state.flashSizeMode = e.target.value;
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Password: wdt81sms | Multiple files + large uploads supported!', 'success');
+log('Ready! Password: wdt81sms | Multiple files + 5TB uploads supported!', 'success');
 </script>
 </body>
 </html>
