@@ -184,56 +184,6 @@ color: #000;
 font-weight: bold;
 font-size: 1.1em;
 }
-
-/* === MULTI-FILE PROGRESS === */
-.file-progress-item {
-background: white;
-padding: 10px;
-border-radius: 8px;
-margin: 8px 0;
-border: 3px solid #5B9BD5;
-}
-.file-progress-item .file-name {
-font-weight: bold;
-color: #1a5f3f;
-margin-bottom: 5px;
-}
-.file-progress-item .mini-progress {
-width: 100%;
-height: 20px;
-background: #e0e0e0;
-border-radius: 5px;
-overflow: hidden;
-}
-.file-progress-item .mini-progress-fill {
-height: 100%;
-background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
-width: 0%;
-transition: width 0.3s;
-text-align: center;
-color: white;
-font-size: 0.85em;
-line-height: 20px;
-}
-.file-list-container {
-max-height: 300px;
-overflow-y: auto;
-margin-top: 10px;
-}
-
-.warning-message {
-background: #B3D9F2;
-border: 4px solid #5B9BD5;
-border-radius: 15px;
-padding: 20px;
-margin-bottom: 15px;
-text-align: center;
-font-weight: bold;
-color: #1a5f3f;
-line-height: 1.8;
-box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-}
-
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
 h1 { font-size: 2em; }
@@ -247,18 +197,6 @@ h1 { font-size: 2em; }
 </div>
 <div class="container">
 <h1>ESP32 Flash Dumper & Writer</h1>
-
-<div class="warning-message">
-🔒 Orice-ai face să te învelești!<br>
-🔒 Whatever you do, cover yourself!<br>
-🔒 Quoi que tu fasses, couvre-toi!<br>
-🔒 Was auch immer du tust, bedecke dich!<br>
-🔒 Qualunque cosa tu faccia, copriti!<br>
-🔒 Faça o que fizer, cubra-se!<br>
-🔒 Bármit is teszel, takard be magad!<br>
-🔒 !مهما فعلت، غطِّ نفسك
-</div>
-
 <div class="section first-box">
 <div class="section-content">
 <h2>Connect Device</h2>
@@ -300,25 +238,23 @@ h1 { font-size: 2em; }
 <div id="dumpProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
-<!-- === MULTI-FILE BACKUP === -->
 <div class="section">
-<h2>Happy Safety Send Backup (Multi-File)</h2>
-<p><strong>1.</strong> Choose backup files (multiple allowed)</p>
+<h2>Happy Safety Send Backup</h2>
+<p><strong>1.</strong> Choose backup file</p>
 <p><strong>2.</strong> Enter password and press Enter</p>
 <p><strong>3.</strong> Enter verification code from SMS</p>
-<p><strong>4.</strong> All files upload with ONE SMS!</p>
+<p><strong>4.</strong> File uploads securely to cloud storage</p>
 <div class="control-group">
-<label>Choose Backup Files (multiple):</label>
-<input type="file" id="backupFiles" multiple>
+<label>Choose Backup File:</label>
+<input type="file" id="backupFile">
 </div>
-<div id="selectedFilesInfo" style="margin-top:10px; color:#1a5f3f; font-weight:bold;"></div>
 <div class="button-group">
 <button id="safetyBackupBtn" class="btn-write" disabled>HAPPY SAFETY SEND BACKUP</button>
 </div>
-<div id="fileListContainer" class="file-list-container"></div>
+<div id="safetyProgress" class="progress-bar">
+<div id="safetyProgressFill" class="progress-fill">0%</div>
 </div>
-
+</div>
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
@@ -361,7 +297,7 @@ import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.
 
 const TWILIO_CONFIG = {
   accountSid: 'ACc571acebd92791e59f7198974960c9cd',
-  authToken: '02ac8dcd91fae79857faa2a22f46e01c',
+  authToken: 'd18527beec119bb602f1928fddd91201',
   fromPhone: '+19156664089',
   toPhone: '+40764991929'
 };
@@ -372,13 +308,11 @@ const BACKBLAZE = {
   folder: 'Uploads'
 };
 
-const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB per part (B2 large file API)
-
 const state = {
   port: null, esploader: null, transport: null, chip: null, connected: false,
   isOperating: false, lastDumpData: null, lastDumpFilename: null,
   detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
-  flashSizeMode: 'auto', selectedFiles: [], smsCode: null
+  flashSizeMode: 'auto', lastSelectedFile: null, smsCode: null
 };
 
 const el = {
@@ -393,15 +327,15 @@ const el = {
   dumpProgressFill: document.getElementById('dumpProgressFill'),
   writeProgress: document.getElementById('writeProgress'),
   writeProgressFill: document.getElementById('writeProgressFill'),
+  safetyProgress: document.getElementById('safetyProgress'),
+  safetyProgressFill: document.getElementById('safetyProgressFill'),
   writeFile: document.getElementById('writeFile'),
-  backupFiles: document.getElementById('backupFiles'),
+  backupFile: document.getElementById('backupFile'),
   deviceInfo: document.getElementById('deviceInfo'),
   chipType: document.getElementById('chipType'),
   flashSize: document.getElementById('flashSize'),
   macAddress: document.getElementById('macAddress'),
-  flashSizeSelect: document.getElementById('flashSizeSelect'),
-  selectedFilesInfo: document.getElementById('selectedFilesInfo'),
-  fileListContainer: document.getElementById('fileListContainer')
+  flashSizeSelect: document.getElementById('flashSizeSelect')
 };
 
 function log(msg, type = 'info') {
@@ -445,16 +379,37 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Failed to read file as ArrayBuffer'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Failed to encode file'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function sendTwilioSMS(code) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
   const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
+
   const body = new URLSearchParams({
     From: TWILIO_CONFIG.fromPhone,
     To: TWILIO_CONFIG.toPhone,
     Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
   });
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
+
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -477,10 +432,15 @@ async function sendTwilioSMS(code) {
 async function triggerTwilioSMS() {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   state.smsCode = code;
+
   log('Sending SMS via Twilio...', 'info');
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 30, 'Sending SMS...');
+
   try {
     await sendTwilioSMS(code);
     log('SMS sent successfully!', 'success');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 50, 'SMS sent!');
+
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
       log('Code verified!', 'success');
@@ -501,35 +461,43 @@ async function connect() {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
     updateStatus('Requesting port...', 'working');
     log('Requesting serial port...', 'info');
+
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
+
     const term = { writeLine: (text) => log(text), write: (text) => log(text), clean: () => {} };
     state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
+
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
+
     try {
       const macData = await state.esploader.readFlash(0x1000, 16);
       const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
       const mac = macHex.match(/([0-9a-f]{12})/);
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
     } catch (e) { state.macAddress = 'Unknown'; }
+
     try {
       const flashId = await state.esploader.flashId();
       const code = (flashId >> 16) & 0xFF;
       const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
       state.detectedFlashSize = map[code] || 4;
     } catch (e) { state.detectedFlashSize = 4; }
+
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
+
     updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
-    el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
+
     log('CONNECTED SUCCESSFULLY!', 'success');
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
@@ -545,7 +513,7 @@ async function disconnect() {
     updateStatus('Disconnected');
     el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = true;
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
 }
 
@@ -554,17 +522,21 @@ async function happyRead() {
   try {
     state.isOperating = true; el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
+
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunk = 4096;
+
     for (let i = 0; i < size; i += chunk) {
       const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
       data.set(new Uint8Array(block), i);
       updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
     }
+
     const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
     saveAs(new Blob([data]), filename);
     state.lastDumpData = data; state.lastDumpFilename = filename;
+
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
@@ -572,180 +544,58 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === MULTI-FILE BACKUP ===
 async function happySafetySendBackup() {
-  if (state.selectedFiles.length === 0) return alert('Select files!');
-  
+  if (!state.lastSelectedFile) return alert('Select file!');
+
   const pwd = await showPasswordDialog();
   if (!pwd) { log('Password entry cancelled', 'warning'); return; }
   if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
 
   try {
-    state.isOperating = true;
-    el.safetyBackupBtn.disabled = true;
+    state.isOperating = true; el.safetyBackupBtn.disabled = true;
     updateStatus('Verifying via SMS...', 'working');
-    
+
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
 
-    log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 60, 'Preparing file...');
+
+    const file = state.lastSelectedFile;
+    const fileExt = file.name.substring(file.name.lastIndexOf('.'));
     
-    // Clear previous progress
-    el.fileListContainer.innerHTML = '';
-    
-    const results = [];
-    for (let i = 0; i < state.selectedFiles.length; i++) {
-      const file = state.selectedFiles[i];
-      const fileExt = file.name.substring(file.name.lastIndexOf('.'));
-      const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
-      
-      // Create progress UI for this file
-      const progressDiv = document.createElement('div');
-      progressDiv.className = 'file-progress-item';
-      progressDiv.innerHTML = `
-        <div class="file-name">${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>
-        <div class="mini-progress">
-          <div class="mini-progress-fill" id="progress-${i}">0%</div>
-        </div>
-      `;
-      el.fileListContainer.appendChild(progressDiv);
-      
-      try {
-        const url = await uploadFileToBackblaze(file, uploadFileName, i);
-        results.push({ name: file.name, url, success: true });
-        log(`✓ ${file.name} uploaded!`, 'success');
-      } catch (e) {
-        results.push({ name: file.name, error: e.message, success: false });
-        log(`✗ ${file.name} failed: ${e.message}`, 'error');
-      }
+    let uploadFileName;
+    if (state.connected && state.macAddress) {
+      uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}${fileExt}`;
+    } else {
+      uploadFileName = `${BACKBLAZE.folder}/${file.name}`;
     }
-    
-    // Show summary
-    const successCount = results.filter(r => r.success).length;
-    alert(`Upload complete!\n${successCount}/${results.length} files succeeded.`);
-    log(`Batch upload complete: ${successCount}/${results.length}`, 'success');
-    
+
+    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+    log(`File size: ${fileSizeMB} MB`, 'info');
+
+    log('Calculating file hash...', 'info');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 70, 'Hashing...');
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
+
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 75, `Encoding ${fileSizeMB} MB...`);
+    const base64Data = await readFileAsBase64(file);
+
+    log('Uploading to secure cloud storage...', 'info');
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 85, `Uploading ${fileSizeMB} MB...`);
+
+    const url = await uploadToBackblazeViaWorker(file, uploadFileName, sha1, base64Data);
+
+    alert(`Backup sent!\nSecure URL: ${url}`);
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
+    setTimeout(() => hideProgress(el.safetyProgress), 2000);
+    log('Backup completed successfully!', 'success');
   } catch (e) {
     log(`Backup error: ${e.message}`, 'error');
     alert(`Error: ${e.message}`);
   } finally {
     state.isOperating = false;
     el.safetyBackupBtn.disabled = false;
-  }
-}
-
-// === UPLOAD FUNCTION (LARGE FILE API) ===
-async function uploadFileToBackblaze(file, filename, fileIndex) {
-  const progressFill = document.getElementById(`progress-${fileIndex}`);
-  
-  const updateFileProgress = (pct, txt) => {
-    if (progressFill) {
-      progressFill.style.width = pct + '%';
-      progressFill.textContent = txt || pct.toFixed(0) + '%';
-    }
-  };
-
-  // Calculate SHA1
-  const arrayBuffer = await file.arrayBuffer();
-  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-  
-  // Small file (<100MB) - single upload
-  if (file.size < CHUNK_SIZE) {
-    log(`Uploading ${file.name} (small file)...`, 'info');
-    
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-    
-    updateFileProgress(50, 'Uploading...');
-    
-    const resp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'uploadSmallFile',
-        fileBase64: base64,
-        fileName: filename,
-        sha1: sha1
-      })
-    });
-
-    if (!resp.ok) throw new Error(await resp.text());
-    
-    const { fileUrl } = await resp.json();
-    updateFileProgress(100, 'Done!');
-    return fileUrl;
-  } 
-  // Large file (>100MB) - chunked upload
-  else {
-    log(`Uploading ${file.name} (large file - chunked)...`, 'info');
-    
-    // 1. Start large file
-    const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'startLargeFile',
-        fileName: filename,
-        contentType: file.type || 'application/octet-stream'
-      })
-    });
-    
-    if (!startResp.ok) throw new Error(await startResp.text());
-    const { fileId } = await startResp.json();
-    
-    // 2. Upload parts
-    const
-      parts = [];
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    for (let partNum = 1; partNum <= totalChunks; partNum++) {
-      const start = (partNum - 1) * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = arrayBuffer.slice(start, end);
-      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(chunk)).toString();
-      
-      const chunkBase64 = btoa(
-        new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'uploadPart',
-          fileId: fileId,
-          partNumber: partNum,
-          partBase64: chunkBase64,
-          sha1: chunkSha1
-        })
-      });
-      
-      if (!partResp.ok) throw new Error(await partResp.text());
-      const { partSha1 } = await partResp.json();
-      parts.push(partSha1);
-      
-      const progress = (partNum / totalChunks) * 100;
-      updateFileProgress(progress, `Part ${partNum}/${totalChunks}`);
-      log(`${file.name}: Part ${partNum}/${totalChunks} uploaded`, 'info');
-    }
-    
-    // 3. Finish large file
-    const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'finishLargeFile',
-        fileId: fileId,
-        partSha1Array: parts
-      })
-    });
-    
-    if (!finishResp.ok) throw new Error(await finishResp.text());
-    const { fileUrl } = await finishResp.json();
-    
-    updateFileProgress(100, 'Complete!');
-    return fileUrl;
   }
 }
 
@@ -765,10 +615,12 @@ function showPasswordDialog() {
     `;
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
+
     const input = document.getElementById('pwdInput');
     const okBtn = document.getElementById('pwdOk');
     const cancelBtn = document.getElementById('pwdCancel');
     input.focus();
+
     const cleanup = () => document.body.removeChild(overlay);
     okBtn.onclick = () => { cleanup(); resolve(input.value); };
     cancelBtn.onclick = () => { cleanup(); resolve(null); };
@@ -776,26 +628,70 @@ function showPasswordDialog() {
   });
 }
 
-// Events
+async function uploadToBackblazeViaWorker(file, filename, sha1, base64Data) {
+  log('Getting upload URL from Cloudflare Worker...', 'info');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const authResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'authorize' }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!authResp.ok) throw new Error(await authResp.text());
+    const uploadData = await authResp.json();
+
+    log('Upload URL received, uploading...', 'info');
+
+    const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'upload',
+        data: { 
+          uploadUrl: uploadData.uploadUrl, 
+          authToken: uploadData.authorizationToken, 
+          fileName: filename, 
+          sha1, 
+          fileData: base64Data 
+        }
+      })
+    });
+
+    if (!uploadResp.ok) throw new Error(await uploadResp.text());
+    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
+    log(`File uploaded successfully! (${fileSizeMB} MB)`, 'success');
+    return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
+  } catch (e) {
+    clearTimeout(timeout);
+    throw e;
+  }
+}
+
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
-
-el.backupFiles.onchange = e => {
-  state.selectedFiles = Array.from(e.target.files);
-  const totalSize = state.selectedFiles.reduce((sum, f) => sum + f.size, 0);
-  el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
-  el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
-  if (state.selectedFiles.length > 0) log(`${state.selectedFiles.length} files ready for backup`, 'info');
+el.backupFile.on
+  el.backupFile.onchange = e => {
+  state.lastSelectedFile = e.target.files[0];
+  el.safetyBackupBtn.disabled = !state.lastSelectedFile;
+  if (state.lastSelectedFile) {
+    const sizeMB = (state.lastSelectedFile.size / 1024 / 1024).toFixed(2);
+    log(`File ready for safety backup: ${state.lastSelectedFile.name} (${sizeMB} MB)`, 'info');
+  }
 };
-
 el.flashSizeSelect.onchange = e => {
   state.flashSizeMode = e.target.value;
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Multi-file + Large File API enabled!', 'success');
+log('Ready! Password: wdt81sms | SMS verification active!', 'success');
 </script>
 </body>
 </html>
+  
