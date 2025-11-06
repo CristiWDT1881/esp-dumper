@@ -156,6 +156,23 @@ line-height: 1.6;
 .log-entry.success { color: #51cf66; }
 .log-entry.warning { color: #ffd43b; }
 .log-entry.info { color: #74c0fc; }
+.file-list {
+margin-top: 10px;
+max-height: 120px;
+overflow-y: auto;
+background: white;
+border: 2px solid #5B9BD5;
+border-radius: 8px;
+padding: 8px;
+font-size: 0.9em;
+}
+.file-item {
+display: flex;
+justify-content: space-between;
+padding: 4px 0;
+border-bottom: 1px solid #ddd;
+}
+.file-item:last-child { border-bottom: none; }
 .radio-links {
 display: flex;
 justify-content: space-around;
@@ -183,10 +200,6 @@ border: 4px solid #5B9BD5;
 color: #000;
 font-weight: bold;
 font-size: 1.1em;
-}
-@media (max-width: 768px) {
-.header-images { flex-direction: column; align-items: center; gap: 15px; }
-h1 { font-size: 2em; }
 }
 </style>
 </head>
@@ -226,6 +239,7 @@ h1 { font-size: 2em; }
 </div>
 <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
 </div>
+
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
 <p><strong>1.</strong> Connect device via USB</p>
@@ -238,16 +252,18 @@ h1 { font-size: 2em; }
 <div id="dumpProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Happy Safety Send Backup</h2>
-<p><strong>1.</strong> Choose backup file</p>
+<p><strong>1.</strong> Choose one or more backup files (Ctrl+Click)</p>
 <p><strong>2.</strong> Enter password and press Enter</p>
-<p><strong>3.</strong> Enter verification code from SMS</p>
-<p><strong>4.</strong> File uploads securely to cloud storage</p>
+<p><strong>3.</strong> Enter verification code from SMS (1 SMS for all files)</p>
+<p><strong>4.</strong> All files upload securely to cloud</p>
 <div class="control-group">
-<label>Choose Backup File:</label>
-<input type="file" id="backupFile">
+<label>Choose Backup Files (multiple):</label>
+<input type="file" id="backupFile" multiple>
 </div>
+<div id="fileList" class="file-list" style="display:none;"></div>
 <div class="button-group">
 <button id="safetyBackupBtn" class="btn-write" disabled>HAPPY SAFETY SEND BACKUP</button>
 </div>
@@ -255,6 +271,7 @@ h1 { font-size: 2em; }
 <div id="safetyProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
@@ -271,12 +288,14 @@ h1 { font-size: 2em; }
 <div id="writeProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
 <div class="log-entry info">System initialized. Connect device to start...</div>
 </div>
 </div>
+
 <div class="section">
 <h2>Radio Live</h2>
 <div class="radio-links">
@@ -312,7 +331,7 @@ const state = {
   port: null, esploader: null, transport: null, chip: null, connected: false,
   isOperating: false, lastDumpData: null, lastDumpFilename: null,
   detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
-  flashSizeMode: 'auto', lastSelectedFile: null, smsCode: null
+  flashSizeMode: 'auto', selectedFiles: [], smsCode: null
 };
 
 const el = {
@@ -331,6 +350,7 @@ const el = {
   safetyProgressFill: document.getElementById('safetyProgressFill'),
   writeFile: document.getElementById('writeFile'),
   backupFile: document.getElementById('backupFile'),
+  fileList: document.getElementById('fileList'),
   deviceInfo: document.getElementById('deviceInfo'),
   chipType: document.getElementById('chipType'),
   flashSize: document.getElementById('flashSize'),
@@ -382,16 +402,13 @@ function updateFlashSizeDisplay() {
 async function sendTwilioSMS(code) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
   const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
-
   const body = new URLSearchParams({
     From: TWILIO_CONFIG.fromPhone,
     To: TWILIO_CONFIG.toPhone,
     Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
   });
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
-
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -414,15 +431,12 @@ async function sendTwilioSMS(code) {
 async function triggerTwilioSMS() {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   state.smsCode = code;
-
   log('Sending SMS via Twilio...', 'info');
-  updateProgress(el.safetyProgress, el.safetyProgressFill, 30, 'Sending SMS...');
-
+  updateProgress(el.safetyProgress, el.safetyProgressFill, 10, 'Sending SMS...');
   try {
     await sendTwilioSMS(code);
     log('SMS sent successfully!', 'success');
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 50, 'SMS sent!');
-
+    updateProgress(el.safetyProgress, el.safetyProgressFill, 20, 'SMS sent!');
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
       log('Code verified!', 'success');
@@ -443,44 +457,35 @@ async function connect() {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
     updateStatus('Requesting port...', 'working');
     log('Requesting serial port...', 'info');
-
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
-
     const term = { writeLine: (text) => log(text), write: (text) => log(text), clean: () => {} };
     state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
-
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-
     try {
       const macData = await state.esploader.readFlash(0x1000, 16);
       const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
       const mac = macHex.match(/([0-9a-f]{12})/);
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
     } catch (e) { state.macAddress = 'Unknown'; }
-
     try {
       const flashId = await state.esploader.flashId();
       const code = (flashId >> 16) & 0xFF;
       const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
       state.detectedFlashSize = map[code] || 4;
     } catch (e) { state.detectedFlashSize = 4; }
-
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
-
     updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
-    el.safetyBackupBtn.disabled = !state.lastSelectedFile;
-
+    updateSafetyButton();
     log('CONNECTED SUCCESSFULLY!', 'success');
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
@@ -505,21 +510,17 @@ async function happyRead() {
   try {
     state.isOperating = true; el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
-
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunk = 4096;
-
     for (let i = 0; i < size; i += chunk) {
       const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
       data.set(new Uint8Array(block), i);
       updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
     }
-
     const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
     saveAs(new Blob([data]), filename);
     state.lastDumpData = data; state.lastDumpFilename = filename;
-
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
@@ -527,9 +528,35 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-async function happySafetySendBackup() {
-  if (!state.lastSelectedFile) return alert('Select file!');
+function updateFileList() {
+  const files = Array.from(el.backupFile.files);
+  state.selectedFiles = files;
+  el.fileList.innerHTML = '';
+  if (files.length === 0) {
+    el.fileList.style.display = 'none';
+    return;
+  }
+  el.fileList.style.display = 'block';
+  let totalSize = 0;
+  files.forEach(file => {
+    totalSize += file.size;
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    item.innerHTML = `<span>${file.name}</span><span>${(file.size / 1024 / 1024).toFixed(2)} MB</span>`;
+    el.fileList.appendChild(item);
+  });
+  const totalMB = (totalSize / 1024 / 1024).toFixed(2);
+  const totalGB = (totalSize / (1024 ** 3)).toFixed(2);
+  log(`${files.length} files selected (${totalGB} GB total)`, 'info');
+  updateSafetyButton();
+}
 
+function updateSafetyButton() {
+  el.safetyBackupBtn.disabled = state.selectedFiles.length === 0 || !state.connected;
+}
+
+async function happySafetySendBackup() {
+  if (state.selectedFiles.length === 0) return alert('Select at least one file!');
   const pwd = await showPasswordDialog();
   if (!pwd) { log('Password entry cancelled', 'warning'); return; }
   if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
@@ -537,28 +564,98 @@ async function happySafetySendBackup() {
   try {
     state.isOperating = true; el.safetyBackupBtn.disabled = true;
     updateStatus('Verifying via SMS...', 'working');
-
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
 
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 60, 'Preparing file...');
+    const totalFiles = state.selectedFiles.length;
+    let uploaded = 0;
+    let failed = 0;
 
-    const file = state.lastSelectedFile;
-    const fileExt = file.name.substring(file.name.lastIndexOf('.'));
-    const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}${fileExt}`;
+    for (let i = 0; i < totalFiles; i++) {
+      const file = state.selectedFiles[i];
+      const fileExt = file.name.substring(file.name.lastIndexOf('.'));
+      const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
+      
+      try {
+        updateProgress(el.safetyProgress, el.safetyProgressFill, 30 + (i / totalFiles) * 60, `Uploading ${file.name}...`);
+        const url = await uploadToBackblazeViaWorker(file, uploadFileName);
+        uploaded++;
+        log(`Uploaded: ${file.name} → ${url}`, 'success');
+      } catch (e) {
+        failed++;
+        log(`Failed: ${file.name} - ${e.message}`, 'error');
+      }
+    }
 
-    const url = await uploadToBackblazeViaWorker(file, uploadFileName);
-
-    alert(`Backup sent!\nSecure URL: ${url}`);
+    const msg = `Upload complete!\nUploaded: ${uploaded}\nFailed: ${failed}`;
+    alert(msg);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
     setTimeout(() => hideProgress(el.safetyProgress), 2000);
-    log('Backup completed successfully!', 'success');
+    log('All uploads finished.', 'success');
   } catch (e) {
     log(`Backup error: ${e.message}`, 'error');
     alert(`Error: ${e.message}`);
   } finally {
     state.isOperating = false;
-    el.safetyBackupBtn.disabled = false;
+    updateSafetyButton();
+  }
+}
+
+async function uploadToBackblazeViaWorker(file, filename) {
+  log(`Requesting presigned URL for ${filename}...`, 'info');
+
+  const arrayBuffer = await file.arrayBuffer();
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
+  const fileSizeGB = (file.size / (1024 ** 3)).toFixed(2);
+
+  const presignResp = await fetchWithRetry(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'getPresignedUrl',
+      fileName: filename,
+      fileSize: file.size,
+      sha1: sha1
+    })
+  });
+
+  if (!presignResp.ok) throw new Error(`Worker error: ${await presignResp.text()}`);
+  const { uploadUrl, fileUrl } = await presignResp.json();
+
+  log(`Direct upload starting: ${fileSizeGB} GB`, 'info');
+  const uploadResp = await fetchWithRetry(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'Content-Length': file.size,
+      'X-Bz-Content-Sha1': sha1
+    },
+    body: file
+  });
+
+  if (!uploadResp.ok) {
+    const err = await uploadResp.text();
+    throw new Error(`Upload failed: ${uploadResp.status} - ${err}`);
+  }
+
+  log(`Success: ${filename} (${fileSizeGB} GB)`, 'success');
+  return fileUrl;
+}
+
+async function fetchWithRetry(url, options, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 600000); // 10 min
+    try {
+      const resp = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timeout);
+      return resp;
+    } catch (e) {
+      clearTimeout(timeout);
+      if (i === retries - 1) throw e;
+      log(`Retry ${i + 1}/${retries}...`, 'warning');
+      await new Promise(r => setTimeout(r, 3000 * (i + 1)));
+    }
   }
 }
 
@@ -578,12 +675,10 @@ function showPasswordDialog() {
     `;
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
-
     const input = document.getElementById('pwdInput');
     const okBtn = document.getElementById('pwdOk');
     const cancelBtn = document.getElementById('pwdCancel');
     input.focus();
-
     const cleanup = () => document.body.removeChild(overlay);
     okBtn.onclick = () => { cleanup(); resolve(input.value); };
     cancelBtn.onclick = () => { cleanup(); resolve(null); };
@@ -591,79 +686,18 @@ function showPasswordDialog() {
   });
 }
 
-async function uploadToBackblazeViaWorker(file, filename) {
-  log('Getting upload URL from Cloudflare Worker...', 'info');
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
-
-  try {
-    const authResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'authorize' }),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!authResp.ok) throw new Error(await authResp.text());
-    const uploadData = await authResp.json();
-
-    log('Upload URL received, preparing file...', 'info');
-    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-    log(`File size: ${fileSizeMB} MB`, 'info');
-
-    // SHA1
-    log('Calculating file hash...', 'info');
-    const arrayBuffer = await file.arrayBuffer();
-    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 75, `Encoding ${fileSizeMB} MB...`);
-
-    // Base64 sigur cu FileReader
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = () => reject(new Error('Failed to encode file'));
-      reader.readAsDataURL(file);
-    });
-
-    log('Uploading to secure cloud storage...', 'info');
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 85, `Uploading ${fileSizeMB} MB...`);
-
-    const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'upload',
-        data: { uploadUrl: uploadData.uploadUrl, authToken: uploadData.authorizationToken, fileName: filename, sha1, fileData: base64Data }
-      })
-    });
-
-    if (!uploadResp.ok) throw new Error(await uploadResp.text());
-    log(`File uploaded successfully! (${fileSizeMB} MB)`, 'success');
-    return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
-  } catch (e) {
-    clearTimeout(timeout);
-    throw e;
-  }
-}
-
 // Events
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
-el.backupFile.onchange = e => {
-  state.lastSelectedFile = e.target.files[0];
-  el.safetyBackupBtn.disabled = !(state.lastSelectedFile && state.connected);
-  if (state.lastSelectedFile && state.connected) log('File ready for safety backup', 'info');
-};
+el.backupFile.onchange = updateFileList;
 el.flashSizeSelect.onchange = e => {
   state.flashSizeMode = e.target.value;
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Password: wdt81sms | SMS verification active!', 'success');
+log('Ready! Password: wdt81sms | Multiple files + large uploads supported!', 'success');
 </script>
 </body>
 </html>
