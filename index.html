@@ -288,7 +288,6 @@ h1 { font-size: 2em; }
 </div>
 <img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
 </div>
-
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
 <p><strong>1.</strong> Connect device via USB</p>
@@ -336,14 +335,12 @@ h1 { font-size: 2em; }
 <div id="writeProgressFill" class="progress-fill">0%</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
 <div class="log-entry info">System initialized. Connect device to start...</div>
 </div>
 </div>
-
 <div class="section">
 <h2>Radio Live</h2>
 <div class="radio-links">
@@ -537,7 +534,7 @@ async function connect() {
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
     updateStatus('Connection Failed', 'error');
-    alert(`Error: ${e.message}`);
+    alert(`Eroare: ${e.message}`);
   }
 }
 
@@ -698,11 +695,11 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     const { fileId } = await startResp.json();
     
     // 2. Upload parts
-    const parts = [];
+    const
+      parts = [];
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     
-    for (let partNum = 1; part
-    Num <= totalChunks; partNum++) {
+    for (let partNum = 1; partNum <= totalChunks; partNum++) {
       const start = (partNum - 1) * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = arrayBuffer.slice(start, end);
