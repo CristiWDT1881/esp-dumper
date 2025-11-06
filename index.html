@@ -382,16 +382,13 @@ function updateFlashSizeDisplay() {
 async function sendTwilioSMS(code) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
   const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
-
   const body = new URLSearchParams({
     From: TWILIO_CONFIG.fromPhone,
     To: TWILIO_CONFIG.toPhone,
     Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
   });
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
-
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -414,15 +411,12 @@ async function sendTwilioSMS(code) {
 async function triggerTwilioSMS() {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   state.smsCode = code;
-
   log('Sending SMS via Twilio...', 'info');
   updateProgress(el.safetyProgress, el.safetyProgressFill, 30, 'Sending SMS...');
-
   try {
     await sendTwilioSMS(code);
     log('SMS sent successfully!', 'success');
     updateProgress(el.safetyProgress, el.safetyProgressFill, 50, 'SMS sent!');
-
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
       log('Code verified!', 'success');
@@ -443,44 +437,35 @@ async function connect() {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
     updateStatus('Requesting port...', 'working');
     log('Requesting serial port...', 'info');
-
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
-
     const term = { writeLine: (text) => log(text), write: (text) => log(text), clean: () => {} };
     state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
-
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-
     try {
       const macData = await state.esploader.readFlash(0x1000, 16);
       const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
       const mac = macHex.match(/([0-9a-f]{12})/);
       state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
     } catch (e) { state.macAddress = 'Unknown'; }
-
     try {
       const flashId = await state.esploader.flashId();
       const code = (flashId >> 16) & 0xFF;
       const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
       state.detectedFlashSize = map[code] || 4;
     } catch (e) { state.detectedFlashSize = 4; }
-
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
-
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
-
     updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
     el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = !state.lastSelectedFile;
-
     log('CONNECTED SUCCESSFULLY!', 'success');
   } catch (e) {
     log(`Connect error: ${e.message}`, 'error');
@@ -505,21 +490,17 @@ async function happyRead() {
   try {
     state.isOperating = true; el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
-
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunk = 4096;
-
     for (let i = 0; i < size; i += chunk) {
       const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
       data.set(new Uint8Array(block), i);
       updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
     }
-
     const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
     saveAs(new Blob([data]), filename);
     state.lastDumpData = data; state.lastDumpFilename = filename;
-
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
@@ -529,26 +510,19 @@ async function happyRead() {
 
 async function happySafetySendBackup() {
   if (!state.lastSelectedFile) return alert('Select file!');
-
   const pwd = await showPasswordDialog();
   if (!pwd) { log('Password entry cancelled', 'warning'); return; }
   if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
-
   try {
     state.isOperating = true; el.safetyBackupBtn.disabled = true;
     updateStatus('Verifying via SMS...', 'working');
-
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
-
     updateProgress(el.safetyProgress, el.safetyProgressFill, 60, 'Preparing file...');
-
     const file = state.lastSelectedFile;
     const fileExt = file.name.substring(file.name.lastIndexOf('.'));
     const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}${fileExt}`;
-
     const url = await uploadToBackblazeViaWorker(file, uploadFileName);
-
     alert(`Backup sent!\nSecure URL: ${url}`);
     updateProgress(el.safetyProgress, el.safetyProgressFill, 100, 'Done!');
     setTimeout(() => hideProgress(el.safetyProgress), 2000);
@@ -578,12 +552,10 @@ function showPasswordDialog() {
     `;
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
-
     const input = document.getElementById('pwdInput');
     const okBtn = document.getElementById('pwdOk');
     const cancelBtn = document.getElementById('pwdCancel');
     input.focus();
-
     const cleanup = () => document.body.removeChild(overlay);
     okBtn.onclick = () => { cleanup(); resolve(input.value); };
     cancelBtn.onclick = () => { cleanup(); resolve(null); };
@@ -591,61 +563,48 @@ function showPasswordDialog() {
   });
 }
 
+// === FUNCȚIA NOUĂ 5TB (getPresignedUrl + no-cors) ===
 async function uploadToBackblazeViaWorker(file, filename) {
-  log('Getting upload URL from Cloudflare Worker...', 'info');
+  log(`Requesting presigned URL for ${filename}...`, 'info');
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  // SHA1 corect (din fișierul original)
+  const arrayBuffer = await file.arrayBuffer();
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
 
-  try {
-    const authResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'authorize' }),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!authResp.ok) throw new Error(await authResp.text());
-    const uploadData = await authResp.json();
+  const presignResp = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'getPresignedUrl',
+      fileName: filename,
+      fileSize: file.size,
+      sha1: sha1
+    })
+  });
 
-    log('Upload URL received, preparing file...', 'info');
-    const fileSizeMB = (file.size / 1024 / 1024).toFixed(2);
-    log(`File size: ${fileSizeMB} MB`, 'info');
-
-    // SHA1
-    log('Calculating file hash...', 'info');
-    const arrayBuffer = await file.arrayBuffer();
-    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 75, `Encoding ${fileSizeMB} MB...`);
-
-    // Base64 sigur cu FileReader
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = () => reject(new Error('Failed to encode file'));
-      reader.readAsDataURL(file);
-    });
-
-    log('Uploading to secure cloud storage...', 'info');
-    updateProgress(el.safetyProgress, el.safetyProgressFill, 85, `Uploading ${fileSizeMB} MB...`);
-
-    const uploadResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'upload',
-        data: { uploadUrl: uploadData.uploadUrl, authToken: uploadData.authorizationToken, fileName: filename, sha1, fileData: base64Data }
-      })
-    });
-
-    if (!uploadResp.ok) throw new Error(await uploadResp.text());
-    log(`File uploaded successfully! (${fileSizeMB} MB)`, 'success');
-    return `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
-  } catch (e) {
-    clearTimeout(timeout);
-    throw e;
+  if (!presignResp.ok) {
+    const err = await presignResp.text();
+    log(`Worker error: ${err}`, 'error');
+    throw new Error(err);
   }
+
+  const { uploadUrl, fileUrl } = await presignResp.json();
+
+  log(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)...`, 'info');
+
+  // PUT direct la Backblaze
+  await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Bz-Content-Sha1': sha1
+    },
+    body: file,
+    mode: 'no-cors'
+  });
+
+  log(`Backup sent! URL: ${fileUrl}`, 'success');
+  return fileUrl;
 }
 
 // Events
@@ -663,7 +622,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Password: wdt81sms | SMS verification active!', 'success');
+log('Ready! Password: wdt81sms | 5TB uploads supported!', 'success');
 </script>
 </body>
 </html>
