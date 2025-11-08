@@ -370,7 +370,7 @@ const BACKBLAZE = {
   keyId: '005e25e49f182e90000000002',
   applicationKey: 'K005+JTZ7WjzT/H6UH+ElezxU/03NsM',
   bucketName: 'githubwdt81',
-  bucketId: 'f10e7b16b2d75cf695200d1a',
+  bucketId: '1303149a14db53119aa90316',
   folder: 'Uploads'
 };
 
@@ -800,100 +800,61 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     }
   };
 
-  const arrayBuffer = await file.arrayBuffer();
-  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
-  
-  if (file.size < CHUNK_SIZE) {
-    log(`Uploading ${file.name} (small file)...`, 'info');
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
     
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    // Get authorization token from Backblaze
+    log(`Getting B2 authorization for ${file.name}...`, 'info');
     
-    updateFileProgress(50, 'Uploading...');
-    
-    const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+    const authResp = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'uploadSmallFile',
-        fileBase64: base64,
-        fileName: filename,
-        sha1: sha1
-      })
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${BACKBLAZE.keyId}:${BACKBLAZE.applicationKey}`),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
     });
 
-    if (!resp.ok) throw new Error(await resp.text());
-    
-    const { fileUrl } = await resp.json();
-    updateFileProgress(100, 'Done!');
-    return fileUrl;
-  } 
-  else {
-    log(`Uploading ${file.name} (large file - chunked)...`, 'info');
-    
-    const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'startLargeFile',
-        fileName: filename,
-        contentType: file.type || 'application/octet-stream'
-      })
-    });
-    
-    if (!startResp.ok) throw new Error(await startResp.text());
-    const { fileId } = await startResp.json();
-    
-    const parts = [];
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    for (let partNum = 1; partNum <= totalChunks; partNum++) {
-      const start = (partNum - 1) * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunk = arrayBuffer.slice(start, end);
-      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(chunk)).toString();
-      
-      const chunkBase64 = btoa(
-        new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'uploadPart',
-          fileId: fileId,
-          partNumber: partNum,
-          partBase64: chunkBase64,
-          sha1: chunkSha1
-        })
-      });
-      
-      if (!partResp.ok) throw new Error(await partResp.text());
-      const { partSha1 } = await partResp.json();
-      parts.push(partSha1);
-      
-      const progress = (partNum / totalChunks) * 100;
-      updateFileProgress(progress, `Part ${partNum}/${totalChunks}`);
-      log(`${file.name}: Part ${partNum}/${totalChunks} uploaded`, 'info');
+    if (!authResp.ok) {
+      const authErr = await authResp.json();
+      throw new Error(`B2 Auth failed: ${authErr.message}`);
     }
-    
-    const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
+
+    const authData = await authResp.json();
+    const apiUrl = authData.apiUrl;
+    const authToken = authData.authorizationToken;
+    const uploadUrl = authData.uploadUrl;
+
+    log(`B2 authenticated. Uploading ${file.name}...`, 'info');
+
+    // Upload file to B2
+    const uploadResp = await fetch(`${uploadUrl}/b2api/v2/b2_upload_file/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'finishLargeFile',
-        fileId: fileId,
-        partSha1Array: parts
-      })
+      headers: {
+        'Authorization': authToken,
+        'X-Bz-File-Name': filename,
+        'Content-Type': 'application/octet-stream',
+        'X-Bz-Content-Sha1': sha1
+      },
+      body: new Uint8Array(arrayBuffer)
     });
+
+    if (!uploadResp.ok) {
+      const uploadErr = await uploadResp.json();
+      throw new Error(`B2 Upload failed: ${uploadErr.message}`);
+    }
+
+    const uploadedFile = await uploadResp.json();
+    updateFileProgress(100, 'Done!');
     
-    if (!finishResp.ok) throw new Error(await finishResp.text());
-    const { fileUrl } = await finishResp.json();
-    
-    updateFileProgress(100, 'Complete!');
+    const fileUrl = `https://f000.backblazeb2.com/file/${BACKBLAZE.bucketName}/${filename}`;
+    log(`B2 upload complete: ${filename}`, 'success');
     return fileUrl;
+
+  } catch (e) {
+    log(`B2 upload error for ${file.name}: ${e.message}`, 'error');
+    throw e;
   }
 }
 
