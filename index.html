@@ -477,14 +477,14 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
-// Enhanced chip detection from logs (from first program)
+// Enhanced chip detection from logs
 function parseChipInfoFromLogs(logs) {
   const info = {
     chipType: 'Unknown',
     chipFamily: 'ESP',
     features: '',
     macAddress: '',
-    flashSize: 4
+    flashSize: null
   };
   
   // Parse chip type and features
@@ -519,7 +519,7 @@ function parseChipInfoFromLogs(logs) {
     info.features = featuresMatch[1].trim();
   }
   
-  // Parse MAC address
+  // Parse MAC address - THIS IS THE CORRECT ONE!
   const macMatch = logs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
   if (macMatch) {
     info.macAddress = macMatch[1].toUpperCase();
@@ -531,83 +531,63 @@ function parseChipInfoFromLogs(logs) {
     info.features = (info.features ? info.features + ', ' : '') + `Crystal: ${crystalMatch[1]}MHz`;
   }
   
+  // CRITICAL: Parse "Detected flash size: 16MB" from OUR OWN logs
+  const flashSizeMatch = logs.match(/Detected flash size:\s*(\d+)MB/i);
+  if (flashSizeMatch) {
+    info.flashSize = parseInt(flashSizeMatch[1], 10);
+  }
+  
   return info;
 }
 
-// Intelligent flash size detection (from first program)
+// Intelligent flash size detection
 async function detectFlashSize() {
   try {
     log('Detecting flash size...', 'info');
     const flashId = await state.esploader.flashId();
-    log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+    log(`Manufacturer: ${(flashId & 0xFF).toString(16)}`, 'info');
+    log(`Device: ${((flashId >> 8) & 0xFFFF).toString(16)}`, 'info');
     
     const sizeCode = (flashId >> 16) & 0xFF;
     
     if (FLASH_SIZE_MAP[sizeCode]) {
       const sizeMB = FLASH_SIZE_MAP[sizeCode];
-      log(`✓ Flash size detected: ${sizeMB} MB (code: 0x${sizeCode.toString(16)})`, 'success');
+      log(`Detected flash size: ${sizeMB}MB`, 'success');
       return sizeMB;
     } else {
       log(`⚠ Unknown flash size code: 0x${sizeCode.toString(16)}, defaulting to 4MB`, 'warning');
       return 4;
     }
   } catch (e) {
-    log(`⚠ Flash detection failed: ${e.message}, defaulting to 4MB`, 'warning');
+    log(`⚠ Flash detection error: ${e.message}, defaulting to 4MB`, 'warning');
     return 4;
   }
 }
 
-// Adaptive MAC address reading based on chip type (from first program)
+// Adaptive MAC address reading based on chip type
 async function readMacAddress() {
   try {
-    let macOffset = 0x1000; // Default ESP32
-    
-    // ESP8266 has MAC at different location
-    if (state.chipFamily === 'ESP8266') {
-      macOffset = 0x0000;
-      log('Reading ESP8266 MAC address...', 'info');
-    } else if (state.chipFamily.includes('S2') || state.chipFamily.includes('S3')) {
-      macOffset = 0x0000;
-      log(`Reading ${state.chipFamily} MAC address...`, 'info');
-    } else if (state.chipFamily.includes('C3') || state.chipFamily.includes('C6')) {
-      macOffset = 0x0000;
-      log(`Reading ${state.chipFamily} MAC address...`, 'info');
-    }
-    
-    // Try reading MAC from efuse block
-    try {
-      const macData = await state.esploader.readFlash(macOffset, 32);
-      const macBytes = new Uint8Array(macData);
-      
-      // Search for valid MAC pattern
-      for (let i = 0; i < macBytes.length - 6; i++) {
-        const possibleMac = Array.from(macBytes.slice(i, i + 6))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join(':')
-          .toUpperCase();
-          
-        // Basic MAC validation
-        if (possibleMac !== '00:00:00:00:00:00' && 
-            possibleMac !== 'FF:FF:FF:FF:FF:FF' &&
-            !possibleMac.startsWith('00:00:00')) {
-          log(`✓ MAC address found: ${possibleMac}`, 'success');
-          return possibleMac;
-        }
-      }
-    } catch (e) {
-      log(`MAC read attempt failed: ${e.message}`, 'warning');
-    }
-    
-    // Fallback: try to parse from chip info
-    if (state.chip && state.chip.MAC_ADDR) {
-      const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-      log(`✓ MAC from chip object: ${mac}`, 'success');
+    // FIRST PRIORITY: Get MAC from initial connection logs
+    const allLogs = state.logBuffer.join('\n');
+    const macMatch = allLogs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
+    if (macMatch) {
+      const mac = macMatch[1].toUpperCase();
+      log(`✓ MAC from connection log: ${mac}`, 'success');
       return mac;
     }
     
+    // SECOND: Try chip object
+    if (state.chip && state.chip.MAC_ADDR) {
+      const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+      log(`✓ MAC from chip: ${mac}`, 'success');
+      return mac;
+    }
+    
+    // THIRD: Flash reading (unreliable, skip it)
+    log(`⚠ Could not determine MAC address`, 'warning');
     return 'Unknown';
   } catch (e) {
-    log(`MAC address detection failed: ${e.message}`, 'error');
+    log(`⚠ MAC detection error: ${e.message}`, 'error');
     return 'Unknown';
   }
 }
@@ -711,14 +691,29 @@ async function connect() {
     
     log(`✓ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
     
-    // CRITICAL FIX: Detect flash size PROPERLY and FORCE it to be used
-    state.detectedFlashSize = await detectFlashSize();
+    // CRITICAL FIX: Detect flash size and USE THE CORRECT ONE
+    const detectedSize = await detectFlashSize();
+    
+    // Now parse logs AGAIN to get the "Detected flash size: 16MB" we just logged
+    const updatedLogs = state.logBuffer.join('\n');
+    const flashMatch = updatedLogs.match(/Detected flash size:\s*(\d+)MB/i);
+    
+    if (flashMatch) {
+      state.detectedFlashSize = parseInt(flashMatch[1], 10);
+      log(`✓ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
+    } else {
+      state.detectedFlashSize = detectedSize;
+      log(`✓ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
+    }
+    
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
     
-    // Read MAC address with chip-specific logic
-    state.macAddress = await readMacAddress();
-    if (!state.macAddress || state.macAddress === 'Unknown') {
-      state.macAddress = chipInfo.macAddress || 'Unknown';
+    // CRITICAL FIX: Use MAC from initial connection logs (FIRST OCCURRENCE)
+    if (chipInfo.macAddress) {
+      state.macAddress = chipInfo.macAddress;
+      log(`✓ Using MAC from connection: ${state.macAddress}`, 'success');
+    } else {
+      state.macAddress = await readMacAddress();
     }
 
     // Update UI with detected information
@@ -776,46 +771,84 @@ async function happyRead() {
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
+    // REALISTIC time estimate: ~30-40 seconds per MB for ESP32-S3
+    const estimatedMinutes = Math.ceil((sizeMB * 35) / 60);
+    
     log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
-    log(`This will take approximately ${Math.ceil(sizeMB * 0.5)} seconds`, 'warning');
+    log(`⏱ Estimated time: ${estimatedMinutes} minute(s) - Please be patient!`, 'warning');
     log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     
     const data = new Uint8Array(size);
     
-    // Adaptive chunk size based on chip type (from first program)
+    // CRITICAL: Use smaller chunks for large flash to avoid timeout
     let chunk = 4096;
-    if (state.chipFamily === 'ESP8266') {
+    if (sizeMB >= 16) {
+      chunk = 4096; // Safer for large flash
+      log('Using 4KB chunks for large flash (16MB+)', 'info');
+    } else if (state.chipFamily === 'ESP8266') {
       chunk = 1024; // ESP8266 works better with smaller chunks
       log('Using ESP8266 optimized read size (1KB chunks)', 'info');
     } else if (state.chipFamily.includes('S3')) {
-      chunk = 8192; // ESP32-S3 can handle larger chunks
-      log('Using ESP32-S3 optimized read size (8KB chunks)', 'info');
+      chunk = 4096; // More conservative for S3
+      log('Using ESP32-S3 optimized read size (4KB chunks)', 'info');
     } else {
       log('Using standard read size (4KB chunks)', 'info');
     }
 
-    let lastLogPercent = -10;
+    let lastLogPercent = -5;
+    let lastLogTime = Date.now();
+    const startTime = Date.now();
     
     for (let i = 0; i < size; i += chunk) {
       const blockSize = Math.min(chunk, size - i);
-      const block = await state.esploader.readFlash(i, blockSize);
-      data.set(new Uint8Array(block), i);
+      
+      try {
+        // Read directly as ArrayBuffer and convert to Uint8Array
+        const block = await state.esploader.readFlash(i, blockSize);
+        const blockArray = new Uint8Array(block);
+        data.set(blockArray, i);
+      } catch (e) {
+        log(`⚠ Error at offset ${i}, retrying...`, 'warning');
+        // Retry once
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const block = await state.esploader.readFlash(i, blockSize);
+        const blockArray = new Uint8Array(block);
+        data.set(blockArray, i);
+      }
       
       const progress = ((i + blockSize) / size) * 100;
       updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
       
-      // Log every 10% or every 1MB for large chips
+      // Log every 5% AND show speed
       const currentPercent = Math.floor(progress);
-      if (currentPercent - lastLogPercent >= 10) {
-        log(`Progress: ${currentPercent}% (${Math.floor((i + blockSize) / 1024)}KB / ${Math.floor(size / 1024)}KB)`, 'info');
+      const now = Date.now();
+      if (currentPercent - lastLogPercent >= 5) {
+        const elapsedSec = (now - startTime) / 1000;
+        const mbRead = (i + blockSize) / (1024 * 1024);
+        const speed = mbRead / elapsedSec;
+        const remaining = (size - i - blockSize) / (1024 * 1024);
+        const eta = Math.ceil(remaining / speed);
+        
+        log(`Progress: ${currentPercent}% (${mbRead.toFixed(2)} MB / ${sizeMB} MB) | Speed: ${speed.toFixed(2)} MB/s | ETA: ${eta}s`, 'info');
         lastLogPercent = currentPercent;
+        lastLogTime = now;
+      }
+      
+      // Yield to browser every 256KB to prevent freezing
+      if (i % (256 * 1024) === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
 
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     const filename = `${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${sizeMB}MB_${new Date().toISOString().slice(0,10)}.bin`;
-    saveAs(new Blob([data]), filename);
+    
+    // Save using Blob directly (more efficient for large files)
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    saveAs(blob, filename);
+    
     state.lastDumpData = data; 
     state.lastDumpFilename = filename;
 
@@ -826,14 +859,16 @@ async function happyRead() {
     log(`✓ DUMP COMPLETE!`, 'success');
     log(`→ Filename: ${filename}`, 'success');
     log(`→ Size: ${(size / 1024 / 1024).toFixed(2)} MB`, 'success');
+    log(`→ Time: ${totalTime} seconds (${(sizeMB / parseFloat(totalTime)).toFixed(2)} MB/s)`, 'success');
     log(`→ Saved to Downloads folder`, 'success');
     log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
     log(`✗ Read error: ${e.message}`, 'error');
+    log(`Stack: ${e.stack}`, 'error');
     updateStatus('Read failed', 'error');
-    alert(`Read error: ${e.message}`);
+    alert(`Read error: ${e.message}\n\nCheck console for details.`);
   } finally { 
     state.isOperating = false; 
     el.dumpBtn.disabled = false; 
@@ -852,7 +887,7 @@ async function happyWrite() {
   const fileSize = file.size;
   const flashSize = getEffectiveFlashBytes();
   
-  // Compatibility check ±25% (from first program)
+  // Compatibility check ±25%
   const minSize = flashSize * 0.75;
   const maxSize = flashSize * 1.25;
   
