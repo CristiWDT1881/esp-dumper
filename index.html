@@ -655,15 +655,20 @@ async function connect() {
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
 
-    // Enhanced terminal that captures all output
+    // Enhanced terminal that captures all output BUT limits trace logging
     const term = { 
       writeLine: (text) => { 
-        log(text); 
-        state.logBuffer.push(text); 
+        // Skip verbose trace messages to avoid "Invalid string length"
+        if (!text.includes('Read') && !text.includes('write 0x')) {
+          log(text); 
+          state.logBuffer.push(text);
+        }
       }, 
       write: (text) => { 
-        log(text); 
-        state.logBuffer.push(text); 
+        if (!text.includes('Read') && !text.includes('write 0x')) {
+          log(text); 
+          state.logBuffer.push(text);
+        }
       }, 
       clean: () => {} 
     };
@@ -672,7 +677,8 @@ async function connect() {
       transport: state.transport, 
       baudrate: 115200, 
       romBaudrate: 115200, 
-      terminal: term 
+      terminal: term,
+      enableTracing: false // CRITICAL: Disable verbose tracing
     });
 
     log('Connecting to chip...', 'info');
@@ -782,40 +788,56 @@ async function happyRead() {
     
     const data = new Uint8Array(size);
     
-    // CRITICAL: Use smaller chunks for large flash to avoid timeout
-    let chunk = 4096;
+    // CRITICAL: Use VERY small chunks for large flash to avoid esptool.js trace() overflow
+    let chunk = 1024; // Start with 1KB - safest option
     if (sizeMB >= 16) {
-      chunk = 4096; // Safer for large flash
-      log('Using 4KB chunks for large flash (16MB+)', 'info');
+      chunk = 1024; // Force 1KB for 16MB+ to avoid "Invalid string length"
+      log('Using 1KB chunks for large flash (16MB+) to avoid overflow', 'warning');
+    } else if (sizeMB >= 8) {
+      chunk = 2048; // 2KB for 8MB
+      log('Using 2KB chunks for 8MB flash', 'info');
     } else if (state.chipFamily === 'ESP8266') {
       chunk = 1024; // ESP8266 works better with smaller chunks
       log('Using ESP8266 optimized read size (1KB chunks)', 'info');
-    } else if (state.chipFamily.includes('S3')) {
-      chunk = 4096; // More conservative for S3
-      log('Using ESP32-S3 optimized read size (4KB chunks)', 'info');
     } else {
+      chunk = 4096; // 4KB for smaller flash
       log('Using standard read size (4KB chunks)', 'info');
     }
 
     let lastLogPercent = -5;
     let lastLogTime = Date.now();
     const startTime = Date.now();
+    let consecutiveErrors = 0;
+    const MAX_RETRIES = 3;
     
     for (let i = 0; i < size; i += chunk) {
       const blockSize = Math.min(chunk, size - i);
+      let success = false;
+      let attempts = 0;
       
-      try {
-        // Read directly as ArrayBuffer and convert to Uint8Array
-        const block = await state.esploader.readFlash(i, blockSize);
-        const blockArray = new Uint8Array(block);
-        data.set(blockArray, i);
-      } catch (e) {
-        log(`⚠ Error at offset ${i}, retrying...`, 'warning');
-        // Retry once
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const block = await state.esploader.readFlash(i, blockSize);
-        const blockArray = new Uint8Array(block);
-        data.set(blockArray, i);
+      while (!success && attempts < MAX_RETRIES) {
+        try {
+          // Read directly as ArrayBuffer and convert to Uint8Array
+          const block = await state.esploader.readFlash(i, blockSize);
+          const blockArray = new Uint8Array(block);
+          data.set(blockArray, i);
+          success = true;
+          consecutiveErrors = 0;
+        } catch (e) {
+          attempts++;
+          consecutiveErrors++;
+          
+          if (consecutiveErrors >= 5) {
+            throw new Error(`Too many consecutive errors. Last error: ${e.message}`);
+          }
+          
+          if (attempts < MAX_RETRIES) {
+            log(`⚠ Error at offset ${i} (attempt ${attempts}/${MAX_RETRIES}), retrying...`, 'warning');
+            await new Promise(resolve => setTimeout(resolve, 200 * attempts)); // Exponential backoff
+          } else {
+            throw new Error(`Failed after ${MAX_RETRIES} attempts at offset ${i}: ${e.message}`);
+          }
+        }
       }
       
       const progress = ((i + blockSize) / size) * 100;
@@ -829,15 +851,17 @@ async function happyRead() {
         const mbRead = (i + blockSize) / (1024 * 1024);
         const speed = mbRead / elapsedSec;
         const remaining = (size - i - blockSize) / (1024 * 1024);
-        const eta = Math.ceil(remaining / speed);
+        const etaSec = Math.ceil(remaining / speed);
+        const etaMin = Math.floor(etaSec / 60);
+        const etaSecRem = etaSec % 60;
         
-        log(`Progress: ${currentPercent}% (${mbRead.toFixed(2)} MB / ${sizeMB} MB) | Speed: ${speed.toFixed(2)} MB/s | ETA: ${eta}s`, 'info');
+        log(`Progress: ${currentPercent}% (${mbRead.toFixed(2)} MB / ${sizeMB} MB) | Speed: ${speed.toFixed(2)} MB/s | ETA: ${etaMin}m ${etaSecRem}s`, 'info');
         lastLogPercent = currentPercent;
         lastLogTime = now;
       }
       
-      // Yield to browser every 256KB to prevent freezing
-      if (i % (256 * 1024) === 0) {
+      // Yield to browser every 128KB to prevent freezing
+      if (i % (128 * 1024) === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
@@ -868,7 +892,7 @@ async function happyRead() {
     log(`✗ Read error: ${e.message}`, 'error');
     log(`Stack: ${e.stack}`, 'error');
     updateStatus('Read failed', 'error');
-    alert(`Read error: ${e.message}\n\nCheck console for details.`);
+    alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting the device.`);
   } finally { 
     state.isOperating = false; 
     el.dumpBtn.disabled = false; 
