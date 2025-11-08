@@ -526,11 +526,12 @@ async function connect() {
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
     log(`Chip detected: ${state.chipType}`, 'success');
     
-    // Read REAL MAC address using chip's method
+    // Read REAL MAC address - MAC is already extracted by ESPLoader
     try {
-      const mac = await state.chip.readMac(state.esploader);
-      if (mac) {
-        state.macAddress = mac;
+      // MAC Address is already extracted and stored in the chip info
+      const macMatch = el.logContainer.textContent.match(/MAC:\s*([0-9a-f:]+)/i);
+      if (macMatch) {
+        state.macAddress = macMatch[1].toUpperCase();
         log(`MAC Address: ${state.macAddress}`, 'success');
       } else {
         state.macAddress = 'Unknown';
@@ -636,7 +637,7 @@ async function happyRead() {
   }
 }
 
-// === HAPPY WRITE FUNCTION (IMPROVED) ===
+// === HAPPY WRITE FUNCTION (FIXED!) ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
@@ -653,8 +654,7 @@ async function happyWrite() {
     log('Reading firmware file...', 'info');
 
     const arrayBuffer = await file.arrayBuffer();
-    const firmwareData = new Uint8Array(arrayBuffer);
-    const firmwareSize = firmwareData.length;
+    const firmwareSize = arrayBuffer.byteLength;
     
     log(`Firmware size: ${(firmwareSize/1024/1024).toFixed(2)} MB`, 'info');
     
@@ -681,12 +681,13 @@ async function happyWrite() {
     updateStatus('Writing firmware...', 'working');
     log('Writing firmware to flash...', 'info');
 
-    // Write firmware using proper flash writing method
+    // FIXED: Create proper file array with the ArrayBuffer directly
     const fileArray = [{
-      data: firmwareData.buffer,
+      data: arrayBuffer,  // Use arrayBuffer directly, not .buffer
       address: 0x0
     }];
 
+    // Write firmware using proper flash writing method
     await state.esploader.writeFlash({
       fileArray: fileArray,
       flashSize: 'keep',
@@ -701,13 +702,15 @@ async function happyWrite() {
           log(`Written ${(written / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`, 'info');
         }
       },
-      calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.lib.WordArray.create(image)).toString()
+      calculateMD5Hash: (image) => {
+        // Convert ArrayBuffer to WordArray for CryptoJS
+        const wordArray = CryptoJS.lib.WordArray.create(image);
+        return CryptoJS.MD5(wordArray).toString();
+      }
     });
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     log('Firmware written successfully!', 'success');
-    log('Verifying...', 'info');
-    
     updateStatus('Write complete! Reset device.', 'connected');
     
     alert('✅ Firmware written successfully!\n\nPlease reset/power cycle your device.');
@@ -724,6 +727,7 @@ async function happyWrite() {
   }
 }
 
+// === MULTI-FILE
 // === MULTI-FILE BACKUP ===
 async function happySafetySendBackup() {
   if (state.selectedFiles.length === 0) return alert('Select files!');
