@@ -508,26 +508,53 @@ async function connect() {
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
+    
+    // Read REAL chip type from connected device
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
+    log(`Chip detected: ${state.chipType}`, 'info');
+    
+    // Read REAL MAC address from chip
     try {
-      const macData = await state.esploader.readFlash(0x1000, 16);
-      const macHex = Array.from(new Uint8Array(macData)).map(b => b.toString(16).padStart(2, '0')).join('');
-      const mac = macHex.match(/([0-9a-f]{12})/);
-      state.macAddress = mac ? mac[1].match(/.{2}/g).join(':').toUpperCase() : 'Unknown';
-    } catch (e) { state.macAddress = 'Unknown'; }
+      const macBytes = await state.esploader.readMac();
+      if (macBytes && macBytes.length >= 6) {
+        state.macAddress = Array.from(macBytes.slice(0, 6))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join(':')
+          .toUpperCase();
+        log(`MAC Address: ${state.macAddress}`, 'info');
+      } else {
+        state.macAddress = 'Unknown';
+        log('MAC Address: Unable to read', 'warning');
+      }
+    } catch (e) { 
+      state.macAddress = 'Unknown'; 
+      log(`MAC read error: ${e.message}`, 'warning');
+    }
+    
+    // Detect REAL flash size from chip
     try {
       const flashId = await state.esploader.flashId();
-      const code = (flashId >> 16) & 0xFF;
-      const map = {0x14:1,0x15:2,0x16:4,0x17:8,0x18:16,0x19:32,0x1A:64};
-      state.detectedFlashSize = map[code] || 4;
-    } catch (e) { state.detectedFlashSize = 4; }
+      log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+      const sizeCode = (flashId >> 16) & 0xFF;
+      const sizeMap = {0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32, 0x1A:64};
+      state.detectedFlashSize = sizeMap[sizeCode] || 4;
+      log(`Flash size detected: ${state.detectedFlashSize} MB`, 'info');
+    } catch (e) { 
+      state.detectedFlashSize = 4; 
+      log(`Flash detection failed, using default: 4 MB`, 'warning');
+    }
+    
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+    
+    // Update UI with REAL data
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
     el.deviceInfo.style.display = 'block';
+    
     updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
-    el.connectBtn.disabled = true; el.disconnectBtn.disabled = false;
+    el.connectBtn.disabled = true; 
+    el.disconnectBtn.disabled = false;
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
     log('CONNECTED SUCCESSFULLY!', 'success');
@@ -546,6 +573,7 @@ async function disconnect() {
     el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
+    log('Disconnected from device', 'info');
   } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
 }
 
@@ -568,11 +596,15 @@ async function happyRead() {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
-  } catch (e) { log(`Read error: ${e.message}`, 'error'); }
+    updateStatus('Read complete!', 'connected');
+  } catch (e) { 
+    log(`Read error: ${e.message}`, 'error'); 
+    updateStatus('Read failed!', 'error');
+  }
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === HAPPY WRITE FUNCTION (NOW ADDED!) ===
+// === HAPPY WRITE FUNCTION ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
@@ -685,7 +717,8 @@ async function happySafetySendBackup() {
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
 
-    log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
+    log(`Uploading ${state.selectedFiles.length}
+    file(s)...`, 'info');
     
     // Clear previous progress
     el.fileListContainer.innerHTML = '';
@@ -699,8 +732,7 @@ async function happySafetySendBackup() {
       // Create progress UI for this file
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
-      progressDiv.
-        innerHTML = `
+      progressDiv.innerHTML = `
         <div class="file-name">${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>
         <div class="mini-progress">
           <div class="mini-progress-fill" id="progress-${i}">0%</div>
@@ -722,9 +754,11 @@ async function happySafetySendBackup() {
     const successCount = results.filter(r => r.success).length;
     alert(`Upload complete!\n${successCount}/${results.length} files succeeded.`);
     log(`Batch upload complete: ${successCount}/${results.length}`, 'success');
+    updateStatus('Backup complete!', 'connected');
     
   } catch (e) {
     log(`Backup error: ${e.message}`, 'error');
+    updateStatus('Backup failed!', 'error');
     alert(`Error: ${e.message}`);
   } finally {
     state.isOperating = false;
@@ -877,7 +911,7 @@ function showPasswordDialog() {
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
-el.writeBtn.onclick = happyWrite; // NOW CONNECTED!
+el.writeBtn.onclick = happyWrite;
 el.safetyBackupBtn.onclick = happySafetySendBackup;
 
 el.backupFiles.onchange = e => {
