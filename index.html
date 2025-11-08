@@ -304,7 +304,6 @@ h1 { font-size: 2em; }
 <p><strong>1.</strong> Choose backup files (multiple allowed)</p>
 <p><strong>2.</strong> Enter password and press Enter</p>
 <p><strong>3.</strong> Enter verification code from SMS</p>
-<p><strong>4.</strong> All files upload with ONE SMS!</p>
 <div class="control-group">
 <label>Choose Backup Files (multiple):</label>
 <input type="file" id="backupFiles" multiple>
@@ -320,7 +319,6 @@ h1 { font-size: 2em; }
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
 <p><strong>2.</strong> Click HAPPY WRITE</p>
-<p><strong>3.</strong> System verifies compatibility (±25%)</p>
 <div class="control-group">
 <label>Select Firmware File:</label>
 <input type="file" id="writeFile" accept=".bin">
@@ -918,6 +916,23 @@ async function happyWrite() {
     if (!confirmWrite) {
       log('Write cancelled by user', 'warning');
       return;
+    }
+
+    // CRITICAL FIX: For ESP8266, need to enter download mode manually
+    if (state.chipFamily === 'ESP8266') {
+      log('⚡ ESP8266 detected - entering download mode...', 'warning');
+      try {
+        await state.transport.setDTR(false);
+        await state.transport.setRTS(true);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await state.transport.setDTR(true);
+        await state.transport.setRTS(false);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await state.transport.setDTR(false);
+        log('✔ ESP8266 ready for flashing', 'success');
+      } catch (e) {
+        log('⚠ Manual reset may be needed - hold BOOT and press RESET', 'warning');
+      }
     }
 
     updateStatus('Erasing flash...', 'working');
