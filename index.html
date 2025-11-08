@@ -715,8 +715,7 @@ async function happyRead() {
       data.set(new Uint8Array(block), i);
       
       const progress = ((i + blockSize) / size) * 100;
-      updateProgress(el.dump
-      Progress, el.dumpProgressFill, progress);
+      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
       
       // Log every 10%
       if (Math.floor(progress) % 10 === 0 && Math.floor(progress) !== Math.floor((i / size) * 100)) {
@@ -900,6 +899,14 @@ async function happyWrite() {
     const fileData = await file.arrayBuffer();
     const data = new Uint8Array(fileData);
 
+    // Adaptive chunk size for writing
+    let chunk = 4096;
+    if (state.chipFamily === 'ESP8266') {
+      chunk = 1024;
+      log('Using ESP8266 optimized write size', 'info');
+    }
+
+    // Erase flash first
     log('Erasing flash (this may take a minute)...', 'warning');
     updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
     
@@ -908,24 +915,18 @@ async function happyWrite() {
     log('Flash erased, writing data...', 'info');
     updateProgress(el.writeProgress, el.writeProgressFill, 10, 'Writing...');
 
-    // Write flash using correct method with progress callback
-    const fileArray = [{ data: data, address: 0x0 }];
-    
-    await state.esploader.writeFlash({
-      fileArray: fileArray,
-      flashSize: 'keep',
-      eraseAll: false,
-      compress: true,
-      reportProgress: (fileIndex, written, total) => {
-        const progress = 10 + ((written / total) * 90);
-        updateProgress(el.writeProgress, el.writeProgressFill, progress);
-        
-        const pct = Math.floor((written / total) * 100);
-        if (pct % 10 === 0 && pct !== Math.floor(((written - 1) / total) * 100)) {
-          log(`Write progress: ${pct}%`, 'info');
-        }
+    // Write in chunks
+    for (let i = 0; i < data.length; i += chunk) {
+      const block = data.slice(i, Math.min(i + chunk, data.length));
+      await state.esploader.flashData(block, i);
+      
+      const progress = 10 + ((i / data.length) * 85);
+      updateProgress(el.writeProgress, el.writeProgressFill, progress);
+      
+      if (Math.floor(progress) % 10 === 0) {
+        log(`Write progress: ${Math.floor(progress - 10)}%`, 'info');
       }
-    });
+    }
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.writeProgress), 2000);
