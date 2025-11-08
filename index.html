@@ -801,7 +801,9 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
   };
 
   const arrayBuffer = await file.arrayBuffer();
-  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
+  
+  // Calculate SHA1 on binary data
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
   
   if (file.size < CHUNK_SIZE) {
     log(`Uploading ${file.name} (small file)...`, 'info');
@@ -858,7 +860,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
       const start = (partNum - 1) * CHUNK_SIZE;
       const end = Math.min(start + CHUNK_SIZE, file.size);
       const chunk = arrayBuffer.slice(start, end);
-      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(chunk)).toString();
+      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(chunk))).toString();
       
       const chunkBase64 = btoa(
         new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
