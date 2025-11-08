@@ -357,7 +357,7 @@ h1 { font-size: 2em; }
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// === TWILIO CREDENTIALS (UPDATED WITH YOUR INFO) ===
+// === TWILIO CREDENTIALS ===
 const TWILIO_CONFIG = {
   accountSid: 'ACc571acebd92791e59f7198974960c9cd',
   authToken: '2c2f8272a5ec29afd38a5cf220fce12e',
@@ -449,6 +449,27 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
+async function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+async function readFlashWithRetry(offset, size, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const data = await state.esploader.readFlash(offset, size);
+      return data;
+    } catch (e) {
+      const delay = Math.pow(2, attempt) * 100;
+      if (attempt < maxRetries - 1) {
+        log(`[RETRY ${attempt + 1}/${maxRetries}] 0x${offset.toString(16)}: ${e.message}`, 'warning');
+        await sleep(delay);
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
 async function sendTwilioSMS(code) {
   const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
   const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
@@ -530,13 +551,13 @@ async function connect() {
     state.connected = true;
     
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-    log(`Chip detected: ${state.chipType}`, 'success');
+    log(`✓ Chip detected: ${state.chipType}`, 'success');
     
     try {
       const macMatch = el.logContainer.textContent.match(/MAC:\s*([0-9a-f:]+)/i);
       if (macMatch) {
         state.macAddress = macMatch[1].toUpperCase();
-        log(`MAC Address: ${state.macAddress}`, 'success');
+        log(`✓ MAC Address: ${state.macAddress}`, 'success');
       } else {
         state.macAddress = 'Unknown';
         log('MAC Address: Unable to read', 'warning');
@@ -552,10 +573,10 @@ async function connect() {
       const sizeCode = (flashId >> 16) & 0xFF;
       const sizeMap = {0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32, 0x1A:64};
       state.detectedFlashSize = sizeMap[sizeCode] || 4;
-      log(`Flash size detected: ${state.detectedFlashSize} MB`, 'success');
+      log(`✓ Flash size AUTO-DETECTED: ${state.detectedFlashSize} MB`, 'success');
     } catch (e) { 
       state.detectedFlashSize = 4; 
-      log(`Flash detection failed, using default: 4 MB`, 'warning');
+      log(`Flash detection fallback: 4 MB`, 'warning');
     }
     
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
@@ -599,24 +620,31 @@ async function happyRead() {
     state.isOperating = true; 
     el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
-    log('Starting flash dump...', 'info');
+    log(`Starting flash dump (${getEffectiveFlashSize()} MB)...`, 'info');
     
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
     const chunkSize = 0x1000;
     let offset = 0;
+    let lastLogOffset = 0;
     
     while (offset < size) {
-      const toRead = Math.min(chunkSize, size - offset);
-      const block = await state.esploader.readFlash(offset, toRead);
-      data.set(new Uint8Array(block), offset);
-      offset += toRead;
-      
-      const progress = (offset / size) * 100;
-      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
-      
-      if (offset % (256 * 1024) === 0) {
-        log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB`, 'info');
+      try {
+        const toRead = Math.min(chunkSize, size - offset);
+        const block = await readFlashWithRetry(offset, toRead, 3);
+        data.set(new Uint8Array(block), offset);
+        offset += toRead;
+        
+        const progress = (offset / size) * 100;
+        updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
+        
+        if (offset - lastLogOffset >= 512 * 1024) {
+          log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB`, 'info');
+          lastLogOffset = offset;
+        }
+      } catch (e) {
+        log(`✗ Fatal read error at 0x${offset.toString(16)}: ${e.message}`, 'error');
+        throw e;
       }
     }
     
@@ -627,7 +655,7 @@ async function happyRead() {
     
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
-    log(`Dump saved: ${filename}`, 'success');
+    log(`✓ Dump saved: ${filename}`, 'success');
     updateStatus('Read complete!', 'connected');
   } catch (e) { 
     log(`Read error: ${e.message}`, 'error'); 
@@ -802,7 +830,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
 
   const arrayBuffer = await file.arrayBuffer();
   
-  // Calculate SHA1 on binary data
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
   
   if (file.size < CHUNK_SIZE) {
@@ -961,7 +988,5 @@ el.flashSizeSelect.onchange = e => {
 };
 
 log('System ready! Connect device to begin...', 'success');
-log('Improved read/write engine loaded', 'info');
-</script>
-</body>
-</html>
+log('✓ Universal ESP reader/writer loaded - All models supported', 'success');
+log('✓ Adaptive retry engine active - ESP8266, ESP32, ESP32-S3 compatible', 'success');
