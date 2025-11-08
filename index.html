@@ -572,6 +572,103 @@ async function happyRead() {
   finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
+// === HAPPY WRITE FUNCTION (NOW ADDED!) ===
+async function happyWrite() {
+  if (!state.connected || state.isOperating) return;
+  
+  const file = el.writeFile.files[0];
+  if (!file) {
+    alert('Please select a firmware file first!');
+    return;
+  }
+
+  try {
+    state.isOperating = true;
+    el.writeBtn.disabled = true;
+    updateStatus('Verifying firmware...', 'working');
+    log('Reading firmware file...', 'info');
+
+    const arrayBuffer = await file.arrayBuffer();
+    const firmwareData = new Uint8Array(arrayBuffer);
+    const firmwareSize = firmwareData.length;
+    const flashSize = getEffectiveFlashBytes();
+
+    // Compatibility check (±25%)
+    const minSize = flashSize * 0.75;
+    const maxSize = flashSize * 1.25;
+
+    if (firmwareSize < minSize || firmwareSize > maxSize) {
+      const msg = `Firmware size mismatch!\nFirmware: ${(firmwareSize/1024/1024).toFixed(2)}MB\nFlash: ${(flashSize/1024/1024).toFixed(2)}MB\nAllowed range: ±25%`;
+      log(msg, 'error');
+      alert(msg);
+      return;
+    }
+
+    log(`Firmware compatible: ${(firmwareSize/1024/1024).toFixed(2)}MB`, 'success');
+    
+    const confirm = window.confirm(
+      `⚠️ WARNING ⚠️\n\n` +
+      `This will ERASE and WRITE the entire flash!\n\n` +
+      `Firmware: ${file.name}\n` +
+      `Size: ${(firmwareSize/1024/1024).toFixed(2)}MB\n` +
+      `Flash: ${(flashSize/1024/1024).toFixed(2)}MB\n\n` +
+      `Do you want to continue?`
+    );
+
+    if (!confirm) {
+      log('Write cancelled by user', 'warning');
+      return;
+    }
+
+    updateStatus('Erasing flash...', 'working');
+    log('Erasing flash memory...', 'info');
+
+    // Erase flash
+    await state.esploader.eraseFlash();
+    log('Flash erased successfully!', 'success');
+
+    updateStatus('Writing firmware...', 'working');
+    log('Writing firmware to flash...', 'info');
+
+    // Write firmware in chunks
+    const writeChunk = 4096;
+    for (let offset = 0; offset < firmwareSize; offset += writeChunk) {
+      const end = Math.min(offset + writeChunk, firmwareSize);
+      const chunk = firmwareData.slice(offset, end);
+      
+      await state.esploader.writeFlash({
+        fileArray: [{
+          data: chunk.buffer,
+          address: offset
+        }],
+        flashSize: 'keep',
+        eraseAll: false,
+        compress: true,
+        reportProgress: (fileIndex, written, total) => {
+          const progress = ((offset + written) / firmwareSize) * 100;
+          updateProgress(el.writeProgress, el.writeProgressFill, progress);
+        }
+      });
+    }
+
+    updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
+    log('Firmware written successfully!', 'success');
+    updateStatus('Write complete! Reset device.', 'connected');
+    
+    alert('✅ Firmware written successfully!\n\nPlease reset/power cycle your device.');
+    
+    setTimeout(() => hideProgress(el.writeProgress), 3000);
+
+  } catch (e) {
+    log(`Write error: ${e.message}`, 'error');
+    updateStatus('Write failed!', 'error');
+    alert(`Write failed: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    el.writeBtn.disabled = false;
+  }
+}
+
 // === MULTI-FILE BACKUP ===
 async function happySafetySendBackup() {
   if (state.selectedFiles.length === 0) return alert('Select files!');
@@ -602,7 +699,8 @@ async function happySafetySendBackup() {
       // Create progress UI for this file
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
-      progressDiv.innerHTML = `
+      progressDiv.
+        innerHTML = `
         <div class="file-name">${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>
         <div class="mini-progress">
           <div class="mini-progress-fill" id="progress-${i}">0%</div>
@@ -695,8 +793,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     const { fileId } = await startResp.json();
     
     // 2. Upload parts
-    const
-      parts = [];
+    const parts = [];
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     
     for (let partNum = 1; partNum <= totalChunks; partNum++) {
@@ -780,6 +877,7 @@ function showPasswordDialog() {
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
+el.writeBtn.onclick = happyWrite; // NOW CONNECTED!
 el.safetyBackupBtn.onclick = happySafetySendBackup;
 
 el.backupFiles.onchange = e => {
@@ -795,7 +893,7 @@ el.flashSizeSelect.onchange = e => {
   if (state.connected) updateFlashSizeDisplay();
 };
 
-log('Ready! Multi-file + Large File API enabled!', 'success');
+log('Ready! Multi-file + Large File API + WRITE enabled!', 'success');
 </script>
 </body>
 </html>
