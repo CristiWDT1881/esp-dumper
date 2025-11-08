@@ -252,7 +252,7 @@ h1 { font-size: 2em; }
 🔒 Qualunque cosa tu faccia, copriti!<br>
 🔒 Faça o que fizer, cubra-se!<br>
 🔒 Bármit is teszel, takard be magad!<br>
-🔒 !مهما فعلت، غطّ نفسك
+🔒 !مهما فعلت، غطِ نفسك
 </div>
 
 <div class="section first-box">
@@ -378,7 +378,7 @@ const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
 const CHUNK_SIZE = 100 * 1024 * 1024;
 
-// Flash size detection codes (from esptool)
+// Flash size detection codes
 const FLASH_SIZE_MAP = {
   0x12: 0.25, 0x13: 0.5, 0x14: 1, 0x15: 2,
   0x16: 4, 0x17: 8, 0x18: 16, 0x19: 32, 0x1A: 64
@@ -457,7 +457,6 @@ function verifyPassword(input) {
   return hash === SAFETY_PASSWORD_HASH;
 }
 
-// Get effective flash size - respects DETECTED size unless manually overridden
 function getEffectiveFlashSize() {
   if (state.flashSizeMode === 'auto') {
     return state.detectedFlashSize;
@@ -477,7 +476,6 @@ function updateFlashSizeDisplay() {
   el.flashSize.textContent = `${size} MB ${mode}`;
 }
 
-// Enhanced chip detection from logs
 function parseChipInfoFromLogs(logs) {
   const info = {
     chipType: 'Unknown',
@@ -487,14 +485,12 @@ function parseChipInfoFromLogs(logs) {
     flashSize: null
   };
   
-  // Parse chip type and features
   const chipMatch = logs.match(/Chip is (ESP[\w\d-]+)\s*(?:\(revision\s*(\d+)\))?/i);
   if (chipMatch) {
     info.chipType = chipMatch[1];
     if (chipMatch[2]) info.chipType += ` (rev ${chipMatch[2]})`;
   }
   
-  // Detect chip family from type
   if (info.chipType.includes('ESP8266')) {
     info.chipFamily = 'ESP8266';
   } else if (info.chipType.includes('S2')) {
@@ -513,25 +509,21 @@ function parseChipInfoFromLogs(logs) {
     info.chipFamily = 'ESP32';
   }
   
-  // Parse features
   const featuresMatch = logs.match(/Features:\s*([^\n]+)/i);
   if (featuresMatch) {
     info.features = featuresMatch[1].trim();
   }
   
-  // Parse MAC address - THIS IS THE CORRECT ONE!
   const macMatch = logs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
   if (macMatch) {
     info.macAddress = macMatch[1].toUpperCase();
   }
   
-  // Parse crystal frequency
   const crystalMatch = logs.match(/Crystal is (\d+)MHz/i);
   if (crystalMatch) {
     info.features = (info.features ? info.features + ', ' : '') + `Crystal: ${crystalMatch[1]}MHz`;
   }
   
-  // CRITICAL: Parse "Detected flash size: 16MB" from OUR OWN logs
   const flashSizeMatch = logs.match(/Detected flash size:\s*(\d+)MB/i);
   if (flashSizeMatch) {
     info.flashSize = parseInt(flashSizeMatch[1], 10);
@@ -540,7 +532,6 @@ function parseChipInfoFromLogs(logs) {
   return info;
 }
 
-// Intelligent flash size detection
 async function detectFlashSize() {
   try {
     log('Detecting flash size...', 'info');
@@ -564,26 +555,22 @@ async function detectFlashSize() {
   }
 }
 
-// Adaptive MAC address reading based on chip type
 async function readMacAddress() {
   try {
-    // FIRST PRIORITY: Get MAC from initial connection logs
     const allLogs = state.logBuffer.join('\n');
     const macMatch = allLogs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
     if (macMatch) {
       const mac = macMatch[1].toUpperCase();
-      log(`✓ MAC from connection log: ${mac}`, 'success');
+      log(`✔ MAC from connection log: ${mac}`, 'success');
       return mac;
     }
     
-    // SECOND: Try chip object
     if (state.chip && state.chip.MAC_ADDR) {
       const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-      log(`✓ MAC from chip: ${mac}`, 'success');
+      log(`✔ MAC from chip: ${mac}`, 'success');
       return mac;
     }
     
-    // THIRD: Flash reading (unreliable, skip it)
     log(`⚠ Could not determine MAC address`, 'warning');
     return 'Unknown';
   } catch (e) {
@@ -627,10 +614,10 @@ async function triggerTwilioSMS() {
   log('Sending SMS via Twilio...', 'info');
   try {
     await sendTwilioSMS(code);
-    log('✓ SMS sent successfully!', 'success');
+    log('✔ SMS sent successfully!', 'success');
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
-      log('✓ Code verified!', 'success');
+      log('✔ Code verified!', 'success');
       return true;
     } else {
       log('✗ Invalid code!', 'error');
@@ -655,17 +642,15 @@ async function connect() {
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
 
-    // Enhanced terminal that captures all output BUT limits trace logging
     const term = { 
       writeLine: (text) => { 
-        // Skip verbose trace messages to avoid "Invalid string length"
-        if (!text.includes('Read') && !text.includes('write 0x')) {
+        if (!text.includes('Read') && !text.includes('write 0x') && !text.includes('Writing') && !text.includes('Wrote')) {
           log(text); 
           state.logBuffer.push(text);
         }
       }, 
       write: (text) => { 
-        if (!text.includes('Read') && !text.includes('write 0x')) {
+        if (!text.includes('Read') && !text.includes('write 0x') && !text.includes('Writing') && !text.includes('Wrote')) {
           log(text); 
           state.logBuffer.push(text);
         }
@@ -675,10 +660,10 @@ async function connect() {
     
     state.esploader = new ESPLoader({ 
       transport: state.transport, 
-      baudrate: 115200, 
+      baudrate: 921600,
       romBaudrate: 115200, 
       terminal: term,
-      enableTracing: false // CRITICAL: Disable verbose tracing
+      enableTracing: false
     });
 
     log('Connecting to chip...', 'info');
@@ -687,7 +672,6 @@ async function connect() {
     state.chip = await state.esploader.main();
     state.connected = true;
     
-    // Parse chip information from logs
     const allLogs = state.logBuffer.join('\n');
     const chipInfo = parseChipInfoFromLogs(allLogs);
     
@@ -695,34 +679,30 @@ async function connect() {
     state.chipFamily = chipInfo.chipFamily;
     state.chipFeatures = chipInfo.features;
     
-    log(`✓ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
+    log(`✔ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
     
-    // CRITICAL FIX: Detect flash size and USE THE CORRECT ONE
     const detectedSize = await detectFlashSize();
     
-    // Now parse logs AGAIN to get the "Detected flash size: 16MB" we just logged
     const updatedLogs = state.logBuffer.join('\n');
     const flashMatch = updatedLogs.match(/Detected flash size:\s*(\d+)MB/i);
     
     if (flashMatch) {
       state.detectedFlashSize = parseInt(flashMatch[1], 10);
-      log(`✓ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
+      log(`✔ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
     } else {
       state.detectedFlashSize = detectedSize;
-      log(`✓ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
+      log(`✔ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
     }
     
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
     
-    // CRITICAL FIX: Use MAC from initial connection logs (FIRST OCCURRENCE)
     if (chipInfo.macAddress) {
       state.macAddress = chipInfo.macAddress;
-      log(`✓ Using MAC from connection: ${state.macAddress}`, 'success');
+      log(`✔ Using MAC from connection: ${state.macAddress}`, 'success');
     } else {
       state.macAddress = await readMacAddress();
     }
 
-    // Update UI with detected information
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     el.chipFeatures.textContent = state.chipFeatures || 'N/A';
@@ -735,7 +715,7 @@ async function connect() {
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
 
-    log(`✓ CONNECTION SUCCESSFUL!`, 'success');
+    log(`✔ CONNECTION SUCCESSFUL!`, 'success');
     log(`→ Chip Family: ${state.chipFamily}`, 'info');
     log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
     log(`→ MAC Address: ${state.macAddress}`, 'info');
@@ -764,7 +744,6 @@ async function disconnect() {
   }
 }
 
-// FIXED: Happy Read now uses DETECTED flash size, not default 4MB
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   
@@ -773,103 +752,90 @@ async function happyRead() {
     el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
 
-    // CRITICAL: Use getEffectiveFlashBytes() which respects detected size
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
-    // REALISTIC time estimate: ~30-40 seconds per MB for ESP32-S3
-    const estimatedMinutes = Math.ceil((sizeMB * 35) / 60);
-    
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
-    log(`⏱ Estimated time: ${estimatedMinutes} minute(s) - Please be patient!`, 'warning');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     
     const data = new Uint8Array(size);
     
-    // CRITICAL: Use VERY small chunks for large flash to avoid esptool.js trace() overflow
-    let chunk = 1024; // Start with 1KB - safest option
+    let chunk;
     if (sizeMB >= 16) {
-      chunk = 1024; // Force 1KB for 16MB+ to avoid "Invalid string length"
-      log('Using 1KB chunks for large flash (16MB+) to avoid overflow', 'warning');
+      chunk = 0x4000;
+      log('⚡ Using optimized 16KB chunks for 16MB flash', 'info');
     } else if (sizeMB >= 8) {
-      chunk = 2048; // 2KB for 8MB
-      log('Using 2KB chunks for 8MB flash', 'info');
+      chunk = 0x4000;
+      log('⚡ Using optimized 16KB chunks for 8MB flash', 'info');
     } else if (state.chipFamily === 'ESP8266') {
-      chunk = 1024; // ESP8266 works better with smaller chunks
-      log('Using ESP8266 optimized read size (1KB chunks)', 'info');
+      chunk = 0x1000;
+      log('Using ESP8266 optimized 4KB chunks', 'info');
     } else {
-      chunk = 4096; // 4KB for smaller flash
-      log('Using standard read size (4KB chunks)', 'info');
+      chunk = 0x4000;
+      log('Using standard 16KB chunks', 'info');
     }
 
-    let lastLogPercent = -5;
-    let lastLogTime = Date.now();
     const startTime = Date.now();
-    let consecutiveErrors = 0;
+    let lastLogPercent = -5;
     const MAX_RETRIES = 3;
+    let consecutiveErrors = 0;
     
-    for (let i = 0; i < size; i += chunk) {
-      const blockSize = Math.min(chunk, size - i);
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
+    
+    for (let offset = 0; offset < size; offset += chunk) {
+      const blockSize = Math.min(chunk, size - offset);
       let success = false;
       let attempts = 0;
       
       while (!success && attempts < MAX_RETRIES) {
         try {
-          // Read directly as ArrayBuffer and convert to Uint8Array
-          const block = await state.esploader.readFlash(i, blockSize);
-          const blockArray = new Uint8Array(block);
-          data.set(blockArray, i);
+          const block = await state.esploader.readFlash(offset, blockSize);
+          data.set(new Uint8Array(block), offset);
           success = true;
           consecutiveErrors = 0;
         } catch (e) {
           attempts++;
           consecutiveErrors++;
           
-          if (consecutiveErrors >= 5) {
-            throw new Error(`Too many consecutive errors. Last error: ${e.message}`);
+          if (consecutiveErrors >= 10) {
+            throw new Error(`Too many errors. Last: ${e.message}`);
           }
           
           if (attempts < MAX_RETRIES) {
-            log(`⚠ Error at offset ${i} (attempt ${attempts}/${MAX_RETRIES}), retrying...`, 'warning');
-            await new Promise(resolve => setTimeout(resolve, 200 * attempts)); // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, 100 * attempts));
           } else {
-            throw new Error(`Failed after ${MAX_RETRIES} attempts at offset ${i}: ${e.message}`);
+            throw new Error(`Failed at 0x${offset.toString(16)} after ${MAX_RETRIES} attempts: ${e.message}`);
           }
         }
       }
       
-      const progress = ((i + blockSize) / size) * 100;
+      const progress = ((offset + blockSize) / size) * 100;
       updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
       
-      // Log every 5% AND show speed
       const currentPercent = Math.floor(progress);
-      const now = Date.now();
       if (currentPercent - lastLogPercent >= 5) {
-        const elapsedSec = (now - startTime) / 1000;
-        const mbRead = (i + blockSize) / (1024 * 1024);
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const mbRead = (offset + blockSize) / (1024 * 1024);
         const speed = mbRead / elapsedSec;
-        const remaining = (size - i - blockSize) / (1024 * 1024);
+        const remaining = (size - offset - blockSize) / (1024 * 1024);
         const etaSec = Math.ceil(remaining / speed);
         const etaMin = Math.floor(etaSec / 60);
         const etaSecRem = etaSec % 60;
         
-        log(`Progress: ${currentPercent}% (${mbRead.toFixed(2)} MB / ${sizeMB} MB) | Speed: ${speed.toFixed(2)} MB/s | ETA: ${etaMin}m ${etaSecRem}s`, 'info');
+        log(`${currentPercent}% | ${mbRead.toFixed(1)}/${sizeMB} MB | ${speed.toFixed(2)} MB/s | ETA: ${etaMin}:${etaSecRem.toString().padStart(2,'0')}`, 'info');
         lastLogPercent = currentPercent;
-        lastLogTime = now;
       }
       
-      // Yield to browser every 128KB to prevent freezing
-      if (i % (128 * 1024) === 0) {
+      if (offset % (256 * 1024) === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
 
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    const avgSpeed = (sizeMB / parseFloat(totalTime)).toFixed(2);
     const filename = `${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${sizeMB}MB_${new Date().toISOString().slice(0,10)}.bin`;
     
-    // Save using Blob directly (more efficient for large files)
     const blob = new Blob([data], { type: 'application/octet-stream' });
     saveAs(blob, filename);
     
@@ -879,20 +845,19 @@ async function happyRead() {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
-    log(`✓ DUMP COMPLETE!`, 'success');
-    log(`→ Filename: ${filename}`, 'success');
-    log(`→ Size: ${(size / 1024 / 1024).toFixed(2)} MB`, 'success');
-    log(`→ Time: ${totalTime} seconds (${(sizeMB / parseFloat(totalTime)).toFixed(2)} MB/s)`, 'success');
-    log(`→ Saved to Downloads folder`, 'success');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✔ DUMP COMPLETE!`, 'success');
+    log(`→ File: ${filename}`, 'success');
+    log(`→ Size: ${sizeMB} MB`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Saved to Downloads`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
     log(`✗ Read error: ${e.message}`, 'error');
-    log(`Stack: ${e.stack}`, 'error');
     updateStatus('Read failed', 'error');
-    alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting the device.`);
+    alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting.`);
   } finally { 
     state.isOperating = false; 
     el.dumpBtn.disabled = false; 
@@ -911,7 +876,6 @@ async function happyWrite() {
   const fileSize = file.size;
   const flashSize = getEffectiveFlashBytes();
   
-  // Compatibility check ±25%
   const minSize = flashSize * 0.75;
   const maxSize = flashSize * 1.25;
   
@@ -934,11 +898,11 @@ async function happyWrite() {
     el.writeBtn.disabled = true;
     updateStatus('Reading firmware...', 'working');
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting firmware write to ${state.chipFamily}`, 'info');
     log(`Firmware: ${file.name}`, 'info');
     log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
 
     const arrayBuffer = await file.arrayBuffer();
     
@@ -957,14 +921,14 @@ async function happyWrite() {
     }
 
     updateStatus('Erasing flash...', 'working');
-    log('Erasing flash (this may take 10-30 seconds)...', 'warning');
+    log('Erasing flash (10-30 seconds)...', 'warning');
     updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
 
     await state.esploader.eraseFlash();
-    log('✓ Flash erased successfully!', 'success');
+    log('✔ Flash erased!', 'success');
 
     updateStatus('Writing firmware...', 'working');
-    log('Writing firmware to flash...', 'info');
+    log('Writing firmware...', 'info');
     updateProgress(el.writeProgress, el.writeProgressFill, 10, 'Writing...');
 
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -979,6 +943,7 @@ async function happyWrite() {
     }];
 
     let lastLogPercent = 0;
+    const startTime = Date.now();
 
     await state.esploader.writeFlash({
       fileArray: fileArray,
@@ -993,7 +958,11 @@ async function happyWrite() {
         
         const pct = Math.floor((written / total) * 100);
         if (pct - lastLogPercent >= 10) {
-          log(`Write progress: ${pct}% (${(written / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB)`, 'info');
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const mbWritten = (written / 1024 / 1024).toFixed(1);
+          const mbTotal = (total / 1024 / 1024).toFixed(1);
+          const speed = ((written / 1024 / 1024) / parseFloat(elapsed)).toFixed(2);
+          log(`${pct}% | ${mbWritten}/${mbTotal} MB | ${speed} MB/s | ${elapsed}s`, 'info');
           lastLogPercent = pct;
         }
       },
@@ -1003,15 +972,19 @@ async function happyWrite() {
       }
     });
 
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    const avgSpeed = ((fileSize / 1024 / 1024) / parseFloat(totalTime)).toFixed(2);
+
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
-    log(`✓ FIRMWARE WRITTEN SUCCESSFULLY!`, 'success');
-    log(`→ Please reset/power cycle your device`, 'success');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✔ WRITE COMPLETE!`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Reset device now!`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     updateStatus('Write complete - Reset device', 'connected');
-    alert('✅ Firmware written successfully!\n\nPlease reset/power cycle your device.');
+    alert('✅ Firmware written!\n\nReset/power cycle your device.');
     
     setTimeout(() => hideProgress(el.writeProgress), 3000);
 
@@ -1048,10 +1021,10 @@ async function happySafetySendBackup() {
     el.safetyBackupBtn.disabled = true;
     updateStatus('Verifying via SMS...', 'working');
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting secure backup upload`, 'info');
     log(`Files: ${state.selectedFiles.length}`, 'info');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
     
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
@@ -1080,7 +1053,7 @@ async function happySafetySendBackup() {
         log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`✓ ${file.name} uploaded successfully!`, 'success');
+        log(`✔ ${file.name} uploaded successfully!`, 'success');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
         log(`✗ ${file.name} failed: ${e.message}`, 'error');
@@ -1089,14 +1062,14 @@ async function happySafetySendBackup() {
     
     const successCount = results.filter(r => r.success).length;
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
-    log(`✓ BACKUP COMPLETE!`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✔ BACKUP COMPLETE!`, 'success');
     log(`→ Success: ${successCount}/${results.length} files`, 'success');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     alert(
       `Backup Upload Complete!\n\n` +
-      `✓ Success: ${successCount}/${results.length} files\n\n` +
+      `✔ Success: ${successCount}/${results.length} files\n\n` +
       `Files are stored securely in cloud storage.`
     );
     
@@ -1125,7 +1098,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
   const arrayBuffer = await file.arrayBuffer();
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
   
-  // Small file upload
   if (file.size < CHUNK_SIZE) {
     log(`  → Small file mode (< 100MB)`, 'info');
     
@@ -1154,9 +1126,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     const { fileUrl } = await resp.json();
     updateFileProgress(100, 'Done!');
     return fileUrl;
-  } 
-  // Large file upload (chunked)
-  else {
+  } else {
     log(`  → Large file mode (chunked upload)`, 'info');
     
     const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
@@ -1262,7 +1232,6 @@ function showPasswordDialog() {
   });
 }
 
-// Event handlers
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
@@ -1275,13 +1244,13 @@ el.backupFiles.onchange = e => {
   el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
   el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
   if (state.selectedFiles.length > 0) {
-    log(`✓ ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
+    log(`✔ ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
   }
 };
 
 el.writeFile.onchange = e => {
   if (e.target.files[0]) {
-    log(`✓ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
+    log(`✔ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
   }
 };
 
@@ -1294,12 +1263,11 @@ el.flashSizeSelect.onchange = e => {
   }
 };
 
-// Initialize
-log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
-log('✓ Universal ESP Flash Tool Ready!', 'success');
-log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'success');
-log('Supported chips: ESP8266, ESP32, ESP32-S2, ESP32-S3, ESP32-C2, ESP32-C3, ESP32-C6, ESP32-H2', 'info');
-log('Password: wdt81sms | SMS verification active', 'info');
+log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓', 'success');
+log('✔ Universal ESP Flash Tool Ready!', 'success');
+log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛', 'success');
+log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
+log('⚡ Optimized for 16MB flash with 921600 baud', 'info');
 log('Ready to connect device...', 'info');
 </script>
 </body>
