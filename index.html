@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 Flash Dumper & Writer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+font-family: 'Segoe UI', Arial, sans-serif;
+background-color: #1a5f3f;
+min-height: 100vh;
+padding: 20px;
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+.header-images {
+display: flex;
+justify-content: space-between;
+align-items: flex-start;
+width: 100%;
+max-width: 700px;
+margin-bottom: 40px;
+}
+.header-images img {
+max-width: 180px;
+height: auto;
+border-radius: 10px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+border: 4px solid #5B9BD5;
+}
+.container { max-width: 700px; width: 100%; }
+h1 {
+color: #FFD700;
+font-size: 2.5em;
+text-align: center;
+margin: 20px 0;
+text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+.section {
+background: #B3D9F2;
+border-radius: 15px;
+padding: 20px;
+margin-bottom: 15px;
+box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+border: 4px solid #5B9BD5;
+}
+.section.first-box {
+display: flex;
+gap: 20px;
+align-items: flex-start;
+padding: 10px 20px;
+}
+.section-content { flex: 1; }
+.signature-img {
+width: 130px;
+height: auto;
+border-radius: 10px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+border: 4px solid #5B9BD5;
+}
+.section h2 { color: #1a5f3f; font-size: 1.3em; margin-bottom: 10px; }
+.section p { color: #000; font-size: 0.95em; margin-bottom: 5px; }
+.control-group { margin-bottom: 10px; }
+.control-group label { color: #1a5f3f; font-weight: bold; display: block; margin-bottom: 5px; }
+select, input[type="file"] {
+width: 100%;
+padding: 8px;
+border: 3px solid #5B9BD5;
+border-radius: 8px;
+background: white;
+}
+.button-group {
+display: flex;
+gap: 10px;
+margin-top: 10px;
+flex-wrap: wrap;
+}
+button {
+flex: 1;
+min-width: 180px;
+padding: 12px;
+font-size: 1.1em;
+font-weight: bold;
+border: none;
+border-radius: 12px;
+cursor: pointer;
+transition: all 0.3s;
+box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+.btn-connect { background: #1a5f3f; color: white; }
+.btn-connect:hover { background: #145030; transform: translateY(-2px); }
+.btn-disconnect { background: #6c757d; color: white; }
+.btn-read, .btn-write { background: #5B9BD5; color: #000; }
+.btn-read:hover, .btn-write:hover { background: #FFD700; transform: translateY(-2px); }
+button:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+.status {
+background: white;
+padding: 10px;
+border-radius: 8px;
+margin-bottom: 10px;
+border: 3px solid #5B9BD5;
+font-weight: 500;
+}
+.status.connected { border-color: #1a5f3f; background: #d4edda; }
+.status.working { border-color: #FFD700; background: #fff3cd; }
+.status.error { border-color: #dc3545; background: #f8d7da; }
+.info-box {
+background: white;
+padding: 10px;
+border-radius: 8px;
+margin-top: 10px;
+border: 3px solid #5B9BD5;
+font-size: 0.9em;
+}
+.info-box strong { color: #1a5f3f; }
+.progress-bar {
+width: 100%;
+height: 30px;
+background: white;
+border-radius: 8px;
+border: 3px solid #5B9BD5;
+overflow: hidden;
+margin: 10px 0;
+display: none;
+}
+.progress-bar.active { display: block; }
+.progress-fill {
+height: 100%;
+background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
+width: 0%;
+transition: width 0.3s;
+display: flex;
+align-items: center;
+justify-content: center;
+color: white;
+font-weight: bold;
+}
+.log-container {
+background: #1e1e1e;
+color: #00ff00;
+padding: 15px;
+border-radius: 8px;
+max-height: 400px;
+overflow-y: auto;
+font-family: 'Courier New', monospace;
+font-size: 0.9em;
+line-height: 1.6;
+}
+.log-entry { margin-bottom: 3px; }
+.log-entry.error { color: #ff6b6b; }
+.log-entry.success { color: #51cf66; }
+.log-entry.warning { color: #ffd43b; }
+.log-entry.info { color: #74c0fc; }
+.radio-links {
+display: flex;
+justify-content: space-around;
+align-items: center;
+gap: 30px;
+flex-wrap: wrap;
+}
+.radio-link {
+display: flex;
+flex-direction: column;
+align-items: center;
+text-decoration: none;
+transition: transform 0.3s;
+}
+.radio-link:hover { transform: scale(1.1); }
+.radio-link img {
+width: 120px;
+height: 120px;
+border-radius: 15px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+margin-bottom: 10px;
+border: 4px solid #5B9BD5;
+}
+.radio-link span {
+color: #000;
+font-weight: bold;
+font-size: 1.1em;
+}
+
+.file-progress-item {
+background: white;
+padding: 10px;
+border-radius: 8px;
+margin: 8px 0;
+border: 3px solid #5B9BD5;
+}
+.file-progress-item .file-name {
+font-weight: bold;
+color: #1a5f3f;
+margin-bottom: 5px;
+}
+.file-progress-item .mini-progress {
+width: 100%;
+height: 20px;
+background: #e0e0e0;
+border-radius: 5px;
+overflow: hidden;
+}
+.file-progress-item .mini-progress-fill {
+height: 100%;
+background: linear-gradient(90deg, #1a5f3f, #5B9BD5);
+width: 0%;
+transition: width 0.3s;
+text-align: center;
+color: white;
+font-size: 0.85em;
+line-height: 20px;
+}
+.file-list-container {
+max-height: 300px;
+overflow-y: auto;
+margin-top: 10px;
+}
+
+.warning-message {
+background: #B3D9F2;
+border: 4px solid #5B9BD5;
+border-radius: 15px;
+padding: 20px;
+margin-bottom: 15px;
+text-align: center;
+font-weight: bold;
+color: #1a5f3f;
+line-height: 1.8;
+box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 768px) {
+.header-images { flex-direction: column; align-items: center; gap: 15px; }
+h1 { font-size: 2em; }
+}
+</style>
+</head>
+<body>
+<div class="header-images">
+<img src="./palatiasi.png" alt="Palatul Culturii" onerror="this.style.display='none'">
+<img src="./logo.png" alt="Logo" onerror="this.style.display='none'">
+</div>
+<div class="container">
+<h1>ESP32 Flash Dumper & Writer</h1>
+
+<div class="warning-message">
+🔒 Orice-ai face să te învelești!<br>
+🔒 Whatever you do, cover yourself!<br>
+🔒 Quoi que tu fasses, couvre-toi!<br>
+🔒 Was auch immer du tust, bedecke dich!<br>
+🔒 Qualunque cosa tu faccia, copriti!<br>
+🔒 Faça o que fizer, cubra-se!<br>
+🔒 Bármit is teszel, takard be magad!<br>
+🔒 !مهما فعلت، غطِّ نفسك
+</div>
+
+<div class="section first-box">
+<div class="section-content">
+<h2>Connect Device</h2>
+<div id="status" class="status">Status: Disconnected</div>
+<div id="deviceInfo" class="info-box" style="display: none;">
+<strong>Chip:</strong> <span id="chipType">-</span><br>
+<strong>Flash Size:</strong> <span id="flashSize">-</span><br>
+<strong>MAC Address:</strong> <span id="macAddress">-</span>
+</div>
+<div class="control-group">
+<label>Flash Size (MB):</label>
+<select id="flashSizeSelect">
+<option value="auto">Auto Detect</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="4">4</option>
+<option value="8">8</option>
+<option value="16">16</option>
+<option value="32">32</option>
+<option value="64">64</option>
+</select>
+</div>
+<div class="button-group">
+<button id="connectBtn" class="btn-connect">CONNECT</button>
+<button id="disconnectBtn" class="btn-disconnect" disabled>DISCONNECT</button>
+</div>
+</div>
+<img src="./semnatura.png" alt="Signature" class="signature-img" onerror="this.style.display='none'">
+</div>
+<div class="section">
+<h2>Happy Read - Dump Flash</h2>
+<p><strong>1.</strong> Connect device via USB</p>
+<p><strong>2.</strong> Click HAPPY READ to dump entire flash</p>
+<p><strong>3.</strong> File saved to Downloads</p>
+<div class="button-group">
+<button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
+</div>
+<div id="dumpProgress" class="progress-bar">
+<div id="dumpProgressFill" class="progress-fill">0%</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Happy Safety Send Backup (Multi-File)</h2>
+<p><strong>1.</strong> Choose backup files (multiple allowed)</p>
+<p><strong>2.</strong> Enter password and press Enter</p>
+<p><strong>3.</strong> Enter verification code from SMS</p>
+<p><strong>4.</strong> All files upload with ONE SMS!</p>
+<div class="control-group">
+<label>Choose Backup Files (multiple):</label>
+<input type="file" id="backupFiles" multiple>
+</div>
+<div id="selectedFilesInfo" style="margin-top:10px; color:#1a5f3f; font-weight:bold;"></div>
+<div class="button-group">
+<button id="safetyBackupBtn" class="btn-write" disabled>HAPPY SAFETY SEND BACKUP</button>
+</div>
+<div id="fileListContainer" class="file-list-container"></div>
+</div>
+
+<div class="section">
+<h2>Happy Write - Write Flash</h2>
+<p><strong>1.</strong> Select firmware file (.bin or .factory.bin)</p>
+<p><strong>2.</strong> Click HAPPY WRITE</p>
+<p><strong>3.</strong> Device will be erased and flashed</p>
+<div class="control-group">
+<label>Select Firmware File:</label>
+<input type="file" id="writeFile" accept=".bin">
+</div>
+<div class="button-group">
+<button id="writeBtn" class="btn-write" disabled>HAPPY WRITE</button>
+</div>
+<div id="writeProgress" class="progress-bar">
+<div id="writeProgressFill" class="progress-fill">0%</div>
+</div>
+</div>
+<div class="section">
+<h2>Operation Log</h2>
+<div id="logContainer" class="log-container">
+<div class="log-entry info">System initialized. Connect device to start...</div>
+</div>
+</div>
+<div class="section">
+<h2>Radio Live</h2>
+<div class="radio-links">
+<a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
+<img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
+<span>Cultural</span>
+</a>
+<a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
+<img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
+<span>Radio Iași</span>
+</a>
+</div>
+</div>
+</div>
+
+<script type="module">
+import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
+
+// === TWILIO CREDENTIALS (UPDATED WITH YOUR INFO) ===
+const TWILIO_CONFIG = {
+  accountSid: 'ACc571acebd92791e59f7198974960c9cd',
+  authToken: '2c2f8272a5ec29afd38a5cf220fce12e',
+  fromPhone: '+19156664089',
+  toPhone: '+40764991929'
+};
+
+// === BACKBLAZE CREDENTIALS ===
+const BACKBLAZE = {
+  keyId: '005334a4b31a9360000000007',
+  applicationKey: 'K005ajOLwAiPaMGV1jqzcmWoCD+7xaE',
+  bucketName: 'githubwdt81',
+  bucketId: '1303149a14db53119aa90316',
+  folder: 'Uploads'
+};
+
+const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
+const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
+const CHUNK_SIZE = 100 * 1024 * 1024;
+
+const state = {
+  port: null, esploader: null, transport: null, chip: null, connected: false,
+  isOperating: false, lastDumpData: null, lastDumpFilename: null,
+  detectedFlashSize: 4, detectedFlashBytes: 4*1024*1024, chipType: '', macAddress: '',
+  flashSizeMode: 'auto', selectedFiles: [], smsCode: null
+};
+
+const el = {
+  status: document.getElementById('status'),
+  connectBtn: document.getElementById('connectBtn'),
+  disconnectBtn: document.getElementById('disconnectBtn'),
+  dumpBtn: document.getElementById('dumpBtn'),
+  writeBtn: document.getElementById('writeBtn'),
+  safetyBackupBtn: document.getElementById('safetyBackupBtn'),
+  logContainer: document.getElementById('logContainer'),
+  dumpProgress: document.getElementById('dumpProgress'),
+  dumpProgressFill: document.getElementById('dumpProgressFill'),
+  writeProgress: document.getElementById('writeProgress'),
+  writeProgressFill: document.getElementById('writeProgressFill'),
+  writeFile: document.getElementById('writeFile'),
+  backupFiles: document.getElementById('backupFiles'),
+  deviceInfo: document.getElementById('deviceInfo'),
+  chipType: document.getElementById('chipType'),
+  flashSize: document.getElementById('flashSize'),
+  macAddress: document.getElementById('macAddress'),
+  flashSizeSelect: document.getElementById('flashSizeSelect'),
+  selectedFilesInfo: document.getElementById('selectedFilesInfo'),
+  fileListContainer: document.getElementById('fileListContainer')
+};
+
+function log(msg, type = 'info') {
+  const time = new Date().toLocaleTimeString('ro-RO');
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.textContent = `[${time}] ${msg}`;
+  el.logContainer.appendChild(entry);
+  el.logContainer.scrollTop = el.logContainer.scrollHeight;
+}
+
+function updateStatus(msg, type = '') {
+  el.status.textContent = msg;
+  el.status.className = `status ${type}`;
+}
+
+function updateProgress(bar, fill, pct, txt) {
+  bar.classList.add('active');
+  fill.style.width = pct + '%';
+  fill.textContent = txt || Math.round(pct) + '%';
+}
+
+function hideProgress(bar) { bar.classList.remove('active'); }
+
+function verifyPassword(input) {
+  const hash = CryptoJS.SHA256(input).toString();
+  return hash === SAFETY_PASSWORD_HASH;
+}
+
+function getEffectiveFlashSize() {
+  return state.flashSizeMode === 'auto' ? state.detectedFlashSize : parseInt(state.flashSizeMode, 10);
+}
+
+function getEffectiveFlashBytes() {
+  return getEffectiveFlashSize() * 1024 * 1024;
+}
+
+function updateFlashSizeDisplay() {
+  const size = getEffectiveFlashSize();
+  const mode = state.flashSizeMode === 'auto' ? `(detected: ${state.detectedFlashSize} MB)` : '(manual)';
+  el.flashSize.textContent = `${size} MB ${mode}`;
+}
+
+async function sendTwilioSMS(code) {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
+  const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
+  const body = new URLSearchParams({
+    From: TWILIO_CONFIG.fromPhone,
+    To: TWILIO_CONFIG.toPhone,
+    Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body.toString(),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+    return await response.json();
+  } catch (e) {
+    clearTimeout(timeout);
+    throw e;
+  }
+}
+
+async function triggerTwilioSMS() {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  state.smsCode = code;
+  log('Sending SMS via Twilio...', 'info');
+  try {
+    await sendTwilioSMS(code);
+    log('SMS sent successfully!', 'success');
+    const userCode = prompt('Enter the 6-digit code from SMS:');
+    if (userCode === code) {
+      log('Code verified!', 'success');
+      return true;
+    } else {
+      log('Invalid code!', 'error');
+      alert('Invalid verification code!');
+      return false;
+    }
+  } catch (error) {
+    log(`SMS error: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+async function connect() {
+  try {
+    if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
+    updateStatus('Requesting port...', 'working');
+    log('Requesting serial port...', 'info');
+    
+    state.port = await navigator.serial.requestPort();
+    state.transport = new Transport(state.port, true);
+    
+    const term = { 
+      writeLine: (text) => log(text, 'info'), 
+      write: (text) => log(text, 'info'), 
+      clean: () => {} 
+    };
+    
+    state.esploader = new ESPLoader({ 
+      transport: state.transport, 
+      baudrate: 115200, 
+      romBaudrate: 115200, 
+      terminal: term 
+    });
+    
+    log('Connecting to chip...', 'info');
+    state.chip = await state.esploader.main();
+    state.connected = true;
+    
+    state.chipType = state.chip?.CHIP_NAME || 'ESP32';
+    log(`Chip detected: ${state.chipType}`, 'success');
+    
+    try {
+      const macMatch = el.logContainer.textContent.match(/MAC:\s*([0-9a-f:]+)/i);
+      if (macMatch) {
+        state.macAddress = macMatch[1].toUpperCase();
+        log(`MAC Address: ${state.macAddress}`, 'success');
+      } else {
+        state.macAddress = 'Unknown';
+        log('MAC Address: Unable to read', 'warning');
+      }
+    } catch (e) { 
+      state.macAddress = 'Unknown'; 
+      log(`MAC read error: ${e.message}`, 'warning');
+    }
+    
+    try {
+      const flashId = await state.esploader.flashId();
+      log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
+      const sizeCode = (flashId >> 16) & 0xFF;
+      const sizeMap = {0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32, 0x1A:64};
+      state.detectedFlashSize = sizeMap[sizeCode] || 4;
+      log(`Flash size detected: ${state.detectedFlashSize} MB`, 'success');
+    } catch (e) { 
+      state.detectedFlashSize = 4; 
+      log(`Flash detection failed, using default: 4 MB`, 'warning');
+    }
+    
+    state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+    
+    el.chipType.textContent = state.chipType;
+    el.macAddress.textContent = state.macAddress;
+    updateFlashSizeDisplay();
+    el.deviceInfo.style.display = 'block';
+    
+    updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
+    el.connectBtn.disabled = true; 
+    el.disconnectBtn.disabled = false;
+    el.dumpBtn.disabled = el.writeBtn.disabled = false;
+    el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
+    log('CONNECTED SUCCESSFULLY!', 'success');
+  } catch (e) {
+    log(`Connect error: ${e.message}`, 'error');
+    updateStatus('Connection Failed', 'error');
+    alert(`Eroare: ${e.message}`);
+  }
+}
+
+async function disconnect() {
+  try {
+    if (state.transport) await state.transport.disconnect();
+    state.connected = false;
+    updateStatus('Disconnected');
+    el.deviceInfo.style.display = 'none';
+    el.connectBtn.disabled = false; 
+    el.disconnectBtn.disabled = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
+    log('Disconnected from device', 'info');
+  } catch (e) { 
+    log(`Disconnect error: ${e.message}`, 'error'); 
+  }
+}
+
+async function happyRead() {
+  if (!state.connected || state.isOperating) return;
+  try {
+    state.isOperating = true; 
+    el.dumpBtn.disabled = true;
+    updateStatus('Reading flash...', 'working');
+    log('Starting flash dump...', 'info');
+    
+    const size = getEffectiveFlashBytes();
+    const data = new Uint8Array(size);
+    const chunkSize = 0x1000;
+    let offset = 0;
+    
+    while (offset < size) {
+      const toRead = Math.min(chunkSize, size - offset);
+      const block = await state.esploader.readFlash(offset, toRead);
+      data.set(new Uint8Array(block), offset);
+      offset += toRead;
+      
+      const progress = (offset / size) * 100;
+      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
+      
+      if (offset % (256 * 1024) === 0) {
+        log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB`, 'info');
+      }
+    }
+    
+    const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
+    saveAs(new Blob([data]), filename);
+    state.lastDumpData = data; 
+    state.lastDumpFilename = filename;
+    
+    updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
+    setTimeout(() => hideProgress(el.dumpProgress), 2000);
+    log(`Dump saved: ${filename}`, 'success');
+    updateStatus('Read complete!', 'connected');
+  } catch (e) { 
+    log(`Read error: ${e.message}`, 'error'); 
+    updateStatus('Read failed!', 'error');
+    alert(`Read error: ${e.message}`);
+  } finally { 
+    state.isOperating = false; 
+    el.dumpBtn.disabled = false; 
+  }
+}
+
+async function happyWrite() {
+  if (!state.connected || state.isOperating) return;
+  
+  const file = el.writeFile.files[0];
+  if (!file) {
+    alert('Please select a firmware file first!');
+    return;
+  }
+
+  try {
+    state.isOperating = true;
+    el.writeBtn.disabled = true;
+    updateStatus('Reading firmware...', 'working');
+    log('Reading firmware file...', 'info');
+
+    const arrayBuffer = await file.arrayBuffer();
+    const firmwareSize = arrayBuffer.byteLength;
+    
+    log(`Firmware size: ${(firmwareSize/1024/1024).toFixed(2)} MB`, 'info');
+    
+    const confirm = window.confirm(
+      `⚠️ WARNING ⚠️\n\n` +
+      `This will ERASE and WRITE the entire flash!\n\n` +
+      `Firmware: ${file.name}\n` +
+      `Size: ${(firmwareSize/1024/1024).toFixed(2)} MB\n\n` +
+      `Do you want to continue?`
+    );
+
+    if (!confirm) {
+      log('Write cancelled by user', 'warning');
+      return;
+    }
+
+    updateStatus('Erasing flash...', 'working');
+    log('Erasing flash (this may take a while)...', 'info');
+
+    await state.esploader.eraseFlash();
+    log('Flash erased successfully!', 'success');
+
+    updateStatus('Writing firmware...', 'working');
+    log('Writing firmware to flash...', 'info');
+
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binaryString = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binaryString += String.fromCharCode(uint8Array[i]);
+    }
+
+    const fileArray = [{
+      data: binaryString,
+      address: 0x0
+    }];
+
+    await state.esploader.writeFlash({
+      fileArray: fileArray,
+      flashSize: 'keep',
+      flashMode: 'keep',
+      flashFreq: 'keep',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (fileIndex, written, total) => {
+        const progress = (written / total) * 100;
+        updateProgress(el.writeProgress, el.writeProgressFill, progress);
+        if (written % (256 * 1024) === 0 || written === total) {
+          log(`Written ${(written / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`, 'info');
+        }
+      },
+      calculateMD5Hash: (image) => {
+        const wordArray = CryptoJS.enc.Latin1.parse(image);
+        return CryptoJS.MD5(wordArray).toString();
+      }
+    });
+
+    updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
+    log('Firmware written successfully!', 'success');
+    updateStatus('Write complete! Reset device.', 'connected');
+    
+    alert('✅ Firmware written successfully!\n\nPlease reset/power cycle your device.');
+    
+    setTimeout(() => hideProgress(el.writeProgress), 3000);
+
+  } catch (e) {
+    log(`Write error: ${e.message}`, 'error');
+    updateStatus('Write failed!', 'error');
+    alert(`Write failed: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    el.writeBtn.disabled = false;
+  }
+}
+
+async function happySafetySendBackup() {
+  if (state.selectedFiles.length === 0) return alert('Select files!');
+  
+  const pwd = await showPasswordDialog();
+  if (!pwd) { log('Password entry cancelled', 'warning'); return; }
+  if (!verifyPassword(pwd)) { log('Wrong password!', 'error'); return alert('Wrong password!'); }
+
+  try {
+    state.isOperating = true;
+    el.safetyBackupBtn.disabled = true;
+    updateStatus('Verifying via SMS...', 'working');
+    
+    const verified = await triggerTwilioSMS();
+    if (!verified) throw new Error('SMS verification failed');
+
+    log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
+    
+    el.fileListContainer.innerHTML = '';
+    
+    const results = [];
+    for (let i = 0; i < state.selectedFiles.length; i++) {
+      const file = state.selectedFiles[i];
+      const fileExt = file.name.substring(file.name.lastIndexOf('.'));
+      const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
+      
+      const progressDiv = document.createElement('div');
+      progressDiv.className = 'file-progress-item';
+      progressDiv.innerHTML = `
+        <div class="file-name">${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>
+        <div class="mini-progress">
+          <div class="mini-progress-fill" id="progress-${i}">0%</div>
+        </div>
+      `;
+      el.fileListContainer.appendChild(progressDiv);
+      
+      try {
+        const url = await uploadFileToBackblaze(file, uploadFileName, i);
+        results.push({ name: file.name, url, success: true });
+        log(`✓ ${file.name} uploaded!`, 'success');
+      } catch (e) {
+        results.push({ name: file.name, error: e.message, success: false });
+        log(`✗ ${file.name} failed: ${e.message}`, 'error');
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    alert(`Upload complete!\n${successCount}/${results.length} files succeeded.`);
+    log(`Batch upload complete: ${successCount}/${results.length}`, 'success');
+    updateStatus('Backup complete!', 'connected');
+    
+  } catch (e) {
+    log(`Backup error: ${e.message}`, 'error');
+    updateStatus('Backup failed!', 'error');
+    alert(`Error: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    el.safetyBackupBtn.disabled = false;
+  }
+}
+
+async function uploadFileToBackblaze(file, filename, fileIndex) {
+  const progressFill = document.getElementById(`progress-${fileIndex}`);
+  
+  const updateFileProgress = (pct, txt) => {
+    if (progressFill) {
+      progressFill.style.width = pct + '%';
+      progressFill.textContent = txt || pct.toFixed(0) + '%';
+    }
+  };
+
+  const arrayBuffer = await file.arrayBuffer();
+  
+  // Calculate SHA1 on binary data
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
+  
+  if (file.size < CHUNK_SIZE) {
+    log(`Uploading ${file.name} (small file)...`, 'info');
+    
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    updateFileProgress(50, 'Uploading...');
+    
+    const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'uploadSmallFile',
+        fileBase64: base64,
+        fileName: filename,
+        sha1: sha1,
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+    
+    const { fileUrl } = await resp.json();
+    updateFileProgress(100, 'Done!');
+    return fileUrl;
+  } 
+  else {
+    log(`Uploading ${file.name} (large file - chunked)...`, 'info');
+    
+    const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'startLargeFile',
+        fileName: filename,
+        contentType: file.type || 'application/octet-stream',
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+    
+    if (!startResp.ok) throw new Error(await startResp.text());
+    const { fileId } = await startResp.json();
+    
+    const parts = [];
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    for (let partNum = 1; partNum <= totalChunks; partNum++) {
+      const start = (partNum - 1) * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = arrayBuffer.slice(start, end);
+      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(chunk))).toString();
+      
+      const chunkBase64 = btoa(
+        new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'uploadPart',
+          fileId: fileId,
+          partNumber: partNum,
+          partBase64: chunkBase64,
+          sha1: chunkSha1,
+          keyId: BACKBLAZE.keyId,
+          applicationKey: BACKBLAZE.applicationKey,
+          bucketId: BACKBLAZE.bucketId
+        })
+      });
+      
+      if (!partResp.ok) throw new Error(await partResp.text());
+      const { partSha1 } = await partResp.json();
+      parts.push(partSha1);
+      
+      const progress = (partNum / totalChunks) * 100;
+      updateFileProgress(progress, `Part ${partNum}/${totalChunks}`);
+      log(`${file.name}: Part ${partNum}/${totalChunks} uploaded`, 'info');
+    }
+    
+    const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'finishLargeFile',
+        fileId: fileId,
+        partSha1Array: parts,
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+    
+    if (!finishResp.ok) throw new Error(await finishResp.text());
+    const { fileUrl } = await finishResp.json();
+    
+    updateFileProgress(100, 'Complete!');
+    return fileUrl;
+  }
+}
+
+function showPasswordDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:10000;`;
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `background:#B3D9F2;padding:30px;border-radius:15px;border:4px solid #5B9BD5;box-shadow:0 10px 40px rgba(0,0,0,0.5);max-width:400px;width:90%;`;
+    dialog.innerHTML = `
+      <h3 style="color:#1a5f3f;margin-bottom:20px;text-align:center;">Enter Password</h3>
+      <input type="password" id="pwdInput" style="width:100%;padding:12px;font-size:1.1em;border:3px solid #5B9BD5;border-radius:8px;margin-bottom:15px;" placeholder="Password">
+      <div style="display:flex;gap:10px;">
+        <button id="pwdOk" style="flex:1;padding:12px;font-size:1em;font-weight:bold;background:#1a5f3f;color:white;border:none;border-radius:8px;cursor:pointer;">OK</button>
+        <button id="pwdCancel" style="flex:1;padding:12px;font-size:1em;font-weight:bold;background:#6c757d;color:white;border:none;border-radius:8px;cursor:pointer;">Cancel</button>
+      </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    const input = document.getElementById('pwdInput');
+    const okBtn = document.getElementById('pwdOk');
+    const cancelBtn = document.getElementById('pwdCancel');
+    input.focus();
+    const cleanup = () => document.body.removeChild(overlay);
+    okBtn.onclick = () => { cleanup(); resolve(input.value); };
+    cancelBtn.onclick = () => { cleanup(); resolve(null); };
+    input.onkeypress = (e) => { if (e.key === 'Enter') { cleanup(); resolve(input.value); } };
+  });
+}
+
+el.connectBtn.onclick = connect;
+el.disconnectBtn.onclick = disconnect;
+el.dumpBtn.onclick = happyRead;
+el.writeBtn.onclick = happyWrite;
+el.safetyBackupBtn.onclick = happySafetySendBackup;
+
+el.backupFiles.onchange = e => {
+  state.selectedFiles = Array.from(e.target.files);
+  const totalSize = state.selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
+  el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
+  if (state.selectedFiles.length > 0) log(`${state.selectedFiles.length} files ready for backup`, 'info');
+};
+
+el.flashSizeSelect.onchange = e => {
+  state.flashSizeMode = e.target.value;
+  if (state.connected) {
+    updateFlashSizeDisplay();
+    log(`Flash size mode changed to: ${e.target.value}`, 'info');
+  }
+};
+
+log('System ready! Connect device to begin...', 'success');
+log('Improved read/write engine loaded', 'info');
+</script>
+</body>
+</html>
