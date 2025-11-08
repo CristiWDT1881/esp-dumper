@@ -185,7 +185,6 @@ font-weight: bold;
 font-size: 1.1em;
 }
 
-/* === MULTI-FILE PROGRESS === */
 .file-progress-item {
 background: white;
 padding: 10px;
@@ -301,7 +300,6 @@ h1 { font-size: 2em; }
 </div>
 </div>
 
-<!-- === MULTI-FILE BACKUP === -->
 <div class="section">
 <h2>Happy Safety Send Backup (Multi-File)</h2>
 <p><strong>1.</strong> Choose backup files (multiple allowed)</p>
@@ -359,20 +357,26 @@ h1 { font-size: 2em; }
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
+// === TWILIO CREDENTIALS (UPDATED WITH YOUR INFO) ===
 const TWILIO_CONFIG = {
   accountSid: 'ACc571acebd92791e59f7198974960c9cd',
-  authToken: '02ac8dcd91fae79857faa2a22f46e01c',
+  authToken: '2c2f8272a5ec29afd38a5cf220fce12e',
   fromPhone: '+19156664089',
   toPhone: '+40764991929'
 };
-const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
-const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
+
+// === BACKBLAZE CREDENTIALS ===
 const BACKBLAZE = {
+  keyId: '005e25e49f182e90000000002',
+  applicationKey: 'K005+JTZ7WjzT/H6UH+ElezxU/03NsM',
   bucketName: 'githubwdt81',
+  bucketId: 'f10e7b16b2d75cf695200d1a',
   folder: 'Uploads'
 };
 
-const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB per part (B2 large file API)
+const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
+const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
+const CHUNK_SIZE = 100 * 1024 * 1024;
 
 const state = {
   port: null, esploader: null, transport: null, chip: null, connected: false,
@@ -466,7 +470,10 @@ async function sendTwilioSMS(code) {
       signal: controller.signal
     });
     clearTimeout(timeout);
-    if (!response.ok) throw new Error(await response.text());
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
     return await response.json();
   } catch (e) {
     clearTimeout(timeout);
@@ -522,13 +529,10 @@ async function connect() {
     state.chip = await state.esploader.main();
     state.connected = true;
     
-    // Read REAL chip type
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
     log(`Chip detected: ${state.chipType}`, 'success');
     
-    // Read REAL MAC address - MAC is already extracted by ESPLoader
     try {
-      // MAC Address is already extracted and stored in the chip info
       const macMatch = el.logContainer.textContent.match(/MAC:\s*([0-9a-f:]+)/i);
       if (macMatch) {
         state.macAddress = macMatch[1].toUpperCase();
@@ -542,7 +546,6 @@ async function connect() {
       log(`MAC read error: ${e.message}`, 'warning');
     }
     
-    // Detect REAL flash size
     try {
       const flashId = await state.esploader.flashId();
       log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
@@ -557,7 +560,6 @@ async function connect() {
     
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
     
-    // Update UI with REAL data
     el.chipType.textContent = state.chipType;
     el.macAddress.textContent = state.macAddress;
     updateFlashSizeDisplay();
@@ -601,7 +603,7 @@ async function happyRead() {
     
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
-    const chunkSize = 0x1000; // 4KB chunks
+    const chunkSize = 0x1000;
     let offset = 0;
     
     while (offset < size) {
@@ -637,7 +639,6 @@ async function happyRead() {
   }
 }
 
-// === HAPPY WRITE FUNCTION (FIXED WITH BINARY STRING!) ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
@@ -674,27 +675,23 @@ async function happyWrite() {
     updateStatus('Erasing flash...', 'working');
     log('Erasing flash (this may take a while)...', 'info');
 
-    // Erase flash completely
     await state.esploader.eraseFlash();
     log('Flash erased successfully!', 'success');
 
     updateStatus('Writing firmware...', 'working');
     log('Writing firmware to flash...', 'info');
 
-    // CRITICAL FIX: Convert ArrayBuffer to binary string
     const uint8Array = new Uint8Array(arrayBuffer);
     let binaryString = '';
     for (let i = 0; i < uint8Array.length; i++) {
       binaryString += String.fromCharCode(uint8Array[i]);
     }
 
-    // Create proper file array with binary string
     const fileArray = [{
-      data: binaryString,  // Use binary string, not ArrayBuffer!
+      data: binaryString,
       address: 0x0
     }];
 
-    // Write firmware using proper flash writing method
     await state.esploader.writeFlash({
       fileArray: fileArray,
       flashSize: 'keep',
@@ -710,7 +707,6 @@ async function happyWrite() {
         }
       },
       calculateMD5Hash: (image) => {
-        // image is already a binary string, convert to WordArray
         const wordArray = CryptoJS.enc.Latin1.parse(image);
         return CryptoJS.MD5(wordArray).toString();
       }
@@ -726,7 +722,7 @@ async function happyWrite() {
 
   } catch (e) {
     log(`Write error: ${e.message}`, 'error');
-    updateStatus('Write failed!','error');
+    updateStatus('Write failed!', 'error');
     alert(`Write failed: ${e.message}`);
   } finally {
     state.isOperating = false;
@@ -734,7 +730,6 @@ async function happyWrite() {
   }
 }
 
-// === MULTI-FILE BACKUP ===
 async function happySafetySendBackup() {
   if (state.selectedFiles.length === 0) return alert('Select files!');
   
@@ -752,7 +747,6 @@ async function happySafetySendBackup() {
 
     log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
     
-    // Clear previous progress
     el.fileListContainer.innerHTML = '';
     
     const results = [];
@@ -761,7 +755,6 @@ async function happySafetySendBackup() {
       const fileExt = file.name.substring(file.name.lastIndexOf('.'));
       const uploadFileName = `${BACKBLAZE.folder}/${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
       
-      // Create progress UI for this file
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
       progressDiv.innerHTML = `
@@ -782,7 +775,6 @@ async function happySafetySendBackup() {
       }
     }
     
-    // Show summary
     const successCount = results.filter(r => r.success).length;
     alert(`Upload complete!\n${successCount}/${results.length} files succeeded.`);
     log(`Batch upload complete: ${successCount}/${results.length}`, 'success');
@@ -798,7 +790,6 @@ async function happySafetySendBackup() {
   }
 }
 
-// === UPLOAD FUNCTION (LARGE FILE API) ===
 async function uploadFileToBackblaze(file, filename, fileIndex) {
   const progressFill = document.getElementById(`progress-${fileIndex}`);
   
@@ -809,11 +800,9 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     }
   };
 
-  // Calculate SHA1
   const arrayBuffer = await file.arrayBuffer();
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(arrayBuffer)).toString();
   
-  // Small file (<100MB) - single upload
   if (file.size < CHUNK_SIZE) {
     log(`Uploading ${file.name} (small file)...`, 'info');
     
@@ -840,11 +829,9 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     updateFileProgress(100, 'Done!');
     return fileUrl;
   } 
-  // Large file (>100MB) - chunked upload
   else {
     log(`Uploading ${file.name} (large file - chunked)...`, 'info');
     
-    // 1. Start large file
     const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -858,7 +845,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     if (!startResp.ok) throw new Error(await startResp.text());
     const { fileId } = await startResp.json();
     
-    // 2. Upload parts
     const parts = [];
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     
@@ -893,7 +879,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
       log(`${file.name}: Part ${partNum}/${totalChunks} uploaded`, 'info');
     }
     
-    // 3. Finish large file
     const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -939,7 +924,6 @@ function showPasswordDialog() {
   });
 }
 
-// Events
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
