@@ -321,9 +321,9 @@ h1 { font-size: 2em; }
 
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
-<p><strong>1.</strong> Select firmware file (.bin)</p>
+<p><strong>1.</strong> Select firmware file (.bin or .factory.bin)</p>
 <p><strong>2.</strong> Click HAPPY WRITE</p>
-<p><strong>3.</strong> System verifies compatibility (±25%)</p>
+<p><strong>3.</strong> Device will be erased and flashed</p>
 <div class="control-group">
 <label>Select Firmware File:</label>
 <input type="file" id="writeFile" accept=".bin">
@@ -421,7 +421,7 @@ function updateStatus(msg, type = '') {
 function updateProgress(bar, fill, pct, txt) {
   bar.classList.add('active');
   fill.style.width = pct + '%';
-  fill.textContent = txt || pct + '%';
+  fill.textContent = txt || Math.round(pct) + '%';
 }
 
 function hideProgress(bar) { bar.classList.remove('active'); }
@@ -501,27 +501,37 @@ async function connect() {
     if (!('serial' in navigator)) throw new Error('Web Serial API not supported! Use Chrome/Edge.');
     updateStatus('Requesting port...', 'working');
     log('Requesting serial port...', 'info');
+    
     state.port = await navigator.serial.requestPort();
     state.transport = new Transport(state.port, true);
-    const term = { writeLine: (text) => log(text), write: (text) => log(text), clean: () => {} };
-    state.esploader = new ESPLoader({ transport: state.transport, baudrate: 115200, romBaudrate: 115200, terminal: term });
+    
+    const term = { 
+      writeLine: (text) => log(text, 'info'), 
+      write: (text) => log(text, 'info'), 
+      clean: () => {} 
+    };
+    
+    state.esploader = new ESPLoader({ 
+      transport: state.transport, 
+      baudrate: 115200, 
+      romBaudrate: 115200, 
+      terminal: term 
+    });
+    
     log('Connecting to chip...', 'info');
     state.chip = await state.esploader.main();
     state.connected = true;
     
-    // Read REAL chip type from connected device
+    // Read REAL chip type
     state.chipType = state.chip?.CHIP_NAME || 'ESP32';
-    log(`Chip detected: ${state.chipType}`, 'info');
+    log(`Chip detected: ${state.chipType}`, 'success');
     
-    // Read REAL MAC address from chip
+    // Read REAL MAC address using chip's method
     try {
-      const macBytes = await state.esploader.readMac();
-      if (macBytes && macBytes.length >= 6) {
-        state.macAddress = Array.from(macBytes.slice(0, 6))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join(':')
-          .toUpperCase();
-        log(`MAC Address: ${state.macAddress}`, 'info');
+      const mac = await state.chip.readMac(state.esploader);
+      if (mac) {
+        state.macAddress = mac;
+        log(`MAC Address: ${state.macAddress}`, 'success');
       } else {
         state.macAddress = 'Unknown';
         log('MAC Address: Unable to read', 'warning');
@@ -531,14 +541,14 @@ async function connect() {
       log(`MAC read error: ${e.message}`, 'warning');
     }
     
-    // Detect REAL flash size from chip
+    // Detect REAL flash size
     try {
       const flashId = await state.esploader.flashId();
       log(`Flash ID: 0x${flashId.toString(16)}`, 'info');
       const sizeCode = (flashId >> 16) & 0xFF;
       const sizeMap = {0x14:1, 0x15:2, 0x16:4, 0x17:8, 0x18:16, 0x19:32, 0x1A:64};
       state.detectedFlashSize = sizeMap[sizeCode] || 4;
-      log(`Flash size detected: ${state.detectedFlashSize} MB`, 'info');
+      log(`Flash size detected: ${state.detectedFlashSize} MB`, 'success');
     } catch (e) { 
       state.detectedFlashSize = 4; 
       log(`Flash detection failed, using default: 4 MB`, 'warning');
@@ -571,28 +581,47 @@ async function disconnect() {
     state.connected = false;
     updateStatus('Disconnected');
     el.deviceInfo.style.display = 'none';
-    el.connectBtn.disabled = false; el.disconnectBtn.disabled = true;
+    el.connectBtn.disabled = false; 
+    el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
     log('Disconnected from device', 'info');
-  } catch (e) { log(`Disconnect error: ${e.message}`, 'error'); }
+  } catch (e) { 
+    log(`Disconnect error: ${e.message}`, 'error'); 
+  }
 }
 
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
-    state.isOperating = true; el.dumpBtn.disabled = true;
+    state.isOperating = true; 
+    el.dumpBtn.disabled = true;
     updateStatus('Reading flash...', 'working');
+    log('Starting flash dump...', 'info');
+    
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
-    const chunk = 4096;
-    for (let i = 0; i < size; i += chunk) {
-      const block = await state.esploader.readFlash(i, Math.min(chunk, size - i));
-      data.set(new Uint8Array(block), i);
-      updateProgress(el.dumpProgress, el.dumpProgressFill, (i / size) * 100);
+    const chunkSize = 0x1000; // 4KB chunks
+    let offset = 0;
+    
+    while (offset < size) {
+      const toRead = Math.min(chunkSize, size - offset);
+      const block = await state.esploader.readFlash(offset, toRead);
+      data.set(new Uint8Array(block), offset);
+      offset += toRead;
+      
+      const progress = (offset / size) * 100;
+      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
+      
+      if (offset % (256 * 1024) === 0) {
+        log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB`, 'info');
+      }
     }
+    
     const filename = `${state.chipType}_${state.macAddress.replace(/:/g, '-')}_${getEffectiveFlashSize()}MB.bin`;
     saveAs(new Blob([data]), filename);
-    state.lastDumpData = data; state.lastDumpFilename = filename;
+    state.lastDumpData = data; 
+    state.lastDumpFilename = filename;
+    
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     log(`Dump saved: ${filename}`, 'success');
@@ -600,11 +629,14 @@ async function happyRead() {
   } catch (e) { 
     log(`Read error: ${e.message}`, 'error'); 
     updateStatus('Read failed!', 'error');
+    alert(`Read error: ${e.message}`);
+  } finally { 
+    state.isOperating = false; 
+    el.dumpBtn.disabled = false; 
   }
-  finally { state.isOperating = false; el.dumpBtn.disabled = false; }
 }
 
-// === HAPPY WRITE FUNCTION ===
+// === HAPPY WRITE FUNCTION (IMPROVED) ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
@@ -617,33 +649,20 @@ async function happyWrite() {
   try {
     state.isOperating = true;
     el.writeBtn.disabled = true;
-    updateStatus('Verifying firmware...', 'working');
+    updateStatus('Reading firmware...', 'working');
     log('Reading firmware file...', 'info');
 
     const arrayBuffer = await file.arrayBuffer();
     const firmwareData = new Uint8Array(arrayBuffer);
     const firmwareSize = firmwareData.length;
-    const flashSize = getEffectiveFlashBytes();
-
-    // Compatibility check (±25%)
-    const minSize = flashSize * 0.75;
-    const maxSize = flashSize * 1.25;
-
-    if (firmwareSize < minSize || firmwareSize > maxSize) {
-      const msg = `Firmware size mismatch!\nFirmware: ${(firmwareSize/1024/1024).toFixed(2)}MB\nFlash: ${(flashSize/1024/1024).toFixed(2)}MB\nAllowed range: ±25%`;
-      log(msg, 'error');
-      alert(msg);
-      return;
-    }
-
-    log(`Firmware compatible: ${(firmwareSize/1024/1024).toFixed(2)}MB`, 'success');
+    
+    log(`Firmware size: ${(firmwareSize/1024/1024).toFixed(2)} MB`, 'info');
     
     const confirm = window.confirm(
       `⚠️ WARNING ⚠️\n\n` +
       `This will ERASE and WRITE the entire flash!\n\n` +
       `Firmware: ${file.name}\n` +
-      `Size: ${(firmwareSize/1024/1024).toFixed(2)}MB\n` +
-      `Flash: ${(flashSize/1024/1024).toFixed(2)}MB\n\n` +
+      `Size: ${(firmwareSize/1024/1024).toFixed(2)} MB\n\n` +
       `Do you want to continue?`
     );
 
@@ -653,38 +672,42 @@ async function happyWrite() {
     }
 
     updateStatus('Erasing flash...', 'working');
-    log('Erasing flash memory...', 'info');
+    log('Erasing flash (this may take a while)...', 'info');
 
-    // Erase flash
+    // Erase flash completely
     await state.esploader.eraseFlash();
     log('Flash erased successfully!', 'success');
 
     updateStatus('Writing firmware...', 'working');
     log('Writing firmware to flash...', 'info');
 
-    // Write firmware in chunks
-    const writeChunk = 4096;
-    for (let offset = 0; offset < firmwareSize; offset += writeChunk) {
-      const end = Math.min(offset + writeChunk, firmwareSize);
-      const chunk = firmwareData.slice(offset, end);
-      
-      await state.esploader.writeFlash({
-        fileArray: [{
-          data: chunk.buffer,
-          address: offset
-        }],
-        flashSize: 'keep',
-        eraseAll: false,
-        compress: true,
-        reportProgress: (fileIndex, written, total) => {
-          const progress = ((offset + written) / firmwareSize) * 100;
-          updateProgress(el.writeProgress, el.writeProgressFill, progress);
+    // Write firmware using proper flash writing method
+    const fileArray = [{
+      data: firmwareData.buffer,
+      address: 0x0
+    }];
+
+    await state.esploader.writeFlash({
+      fileArray: fileArray,
+      flashSize: 'keep',
+      flashMode: 'keep',
+      flashFreq: 'keep',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (fileIndex, written, total) => {
+        const progress = (written / total) * 100;
+        updateProgress(el.writeProgress, el.writeProgressFill, progress);
+        if (written % (256 * 1024) === 0 || written === total) {
+          log(`Written ${(written / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`, 'info');
         }
-      });
-    }
+      },
+      calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.lib.WordArray.create(image)).toString()
+    });
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     log('Firmware written successfully!', 'success');
+    log('Verifying...', 'info');
+    
     updateStatus('Write complete! Reset device.', 'connected');
     
     alert('✅ Firmware written successfully!\n\nPlease reset/power cycle your device.');
@@ -717,8 +740,7 @@ async function happySafetySendBackup() {
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
 
-    log(`Uploading ${state.selectedFiles.length}
-    file(s)...`, 'info');
+    log(`Uploading ${state.selectedFiles.length} file(s)...`, 'info');
     
     // Clear previous progress
     el.fileListContainer.innerHTML = '';
@@ -924,10 +946,14 @@ el.backupFiles.onchange = e => {
 
 el.flashSizeSelect.onchange = e => {
   state.flashSizeMode = e.target.value;
-  if (state.connected) updateFlashSizeDisplay();
+  if (state.connected) {
+    updateFlashSizeDisplay();
+    log(`Flash size mode changed to: ${e.target.value}`, 'info');
+  }
 };
 
-log('Ready! Multi-file + Large File API + WRITE enabled!', 'success');
+log('System ready! Connect device to begin...', 'success');
+log('Improved read/write engine loaded', 'info');
 </script>
 </body>
 </html>
