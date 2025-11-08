@@ -357,7 +357,6 @@ h1 { font-size: 2em; }
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// === TWILIO CREDENTIALS (UPDATED WITH YOUR INFO) ===
 const TWILIO_CONFIG = {
   accountSid: 'ACc571acebd92791e59f7198974960c9cd',
   authToken: '2c2f8272a5ec29afd38a5cf220fce12e',
@@ -365,7 +364,6 @@ const TWILIO_CONFIG = {
   toPhone: '+40764991929'
 };
 
-// === BACKBLAZE CREDENTIALS ===
 const BACKBLAZE = {
   keyId: '005334a4b31a9360000000007',
   applicationKey: 'K005ajOLwAiPaMGV1jqzcmWoCD+7xaE',
@@ -593,6 +591,7 @@ async function disconnect() {
   }
 }
 
+// === FUNCȚIA happyRead() CORECTATĂ PENTRU TOATE PLĂCILE ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   try {
@@ -603,20 +602,44 @@ async function happyRead() {
     
     const size = getEffectiveFlashBytes();
     const data = new Uint8Array(size);
-    const chunkSize = 0x1000;
+    const chunkSize = 1024; // REDUS LA 1KB pentru compatibilitate maximă cu toate plăcile
     let offset = 0;
+    let lastLogPercent = 0;
     
     while (offset < size) {
       const toRead = Math.min(chunkSize, size - offset);
-      const block = await state.esploader.readFlash(offset, toRead);
-      data.set(new Uint8Array(block), offset);
-      offset += toRead;
       
-      const progress = (offset / size) * 100;
-      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
-      
-      if (offset % (256 * 1024) === 0) {
-        log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB`, 'info');
+      try {
+        const block = await state.esploader.readFlash(offset, toRead);
+        
+        // Conversie sigură din ArrayBuffer în Uint8Array
+        let blockData;
+        if (block instanceof ArrayBuffer) {
+          blockData = new Uint8Array(block);
+        } else if (block instanceof Uint8Array) {
+          blockData = block;
+        } else {
+          // Fallback pentru alte tipuri de date
+          blockData = new Uint8Array(Array.from(block));
+        }
+        
+        data.set(blockData, offset);
+        offset += toRead;
+        
+        const progress = (offset / size) * 100;
+        updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
+        
+        // Log doar la fiecare 5% pentru a nu supraîncărca consola
+        const currentPercent = Math.floor(progress / 5) * 5;
+        if (currentPercent > lastLogPercent) {
+          log(`Read ${(offset / 1024 / 1024).toFixed(2)} MB / ${(size / 1024 / 1024).toFixed(2)} MB (${currentPercent}%)`, 'info');
+          lastLogPercent = currentPercent;
+        }
+        
+      } catch (blockError) {
+        log(`Error reading at offset 0x${offset.toString(16)}: ${blockError.message}`, 'error');
+        // Încearcă să continue cu următorul bloc
+        offset += toRead;
       }
     }
     
@@ -704,8 +727,7 @@ async function happyWrite() {
         updateProgress(el.writeProgress, el.writeProgressFill, progress);
         if (written % (256 * 1024) === 0 || written === total) {
           log(`Written ${(written / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`, 'info');
-        }
-      },
+          },
       calculateMD5Hash: (image) => {
         const wordArray = CryptoJS.enc.Latin1.parse(image);
         return CryptoJS.MD5(wordArray).toString();
@@ -802,7 +824,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
 
   const arrayBuffer = await file.arrayBuffer();
   
-  // Calculate SHA1 on binary data
   const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
   
   if (file.size < CHUNK_SIZE) {
