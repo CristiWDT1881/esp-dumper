@@ -1247,6 +1247,31 @@ function showPasswordDialog() {
   });
 }
 
+// Adăugare comandă specială doar pentru scriere pe ESP8266: Forțează reintrarea în mod download cu secvență ajustată
+async function forceESP8266DownloadMode() {
+  if (state.chipFamily !== 'ESP8266') {
+    log('⚠ This command is only for ESP8266 write operations!', 'warning');
+    return;
+  }
+  if (!state.connected || state.isOperating) return;
+
+  log('⚡ Forcing ESP8266 into download mode for write...', 'warning');
+  try {
+    // Secvență ajustată pentru ESP8266: Asigură intrarea corectă în bootloader pentru erase/write
+    // Bazat pe studiu: Pentru ESP8266, polaritatea DTR/RTS poate varia, dar secvența standard este reset cu GPIO0 low.
+    // Ajustare: Inversăm polaritatea DTR pentru a asigura GPIO0 low (asumând conectare comună: DTR -> GPIO0 inverted, RTS -> EN).
+    await state.transport.setRTS(true);  // Assert reset (EN low)
+    await state.transport.setDTR(true);  // Assert boot (GPIO0 low)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await state.transport.setRTS(false); // Release reset (EN high)
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // Lasă DTR true (GPIO0 low) pe durata flashing-ului pentru stabilitate pe ESP8266 vechi
+    log('✔ ESP8266 forced into download mode. Now you can proceed with HAPPY WRITE.', 'success');
+  } catch (e) {
+    log(`✗ Force mode error: ${e.message}. Try manual: Hold GPIO0 low and reset.`, 'error');
+  }
+}
+
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
@@ -1284,6 +1309,30 @@ log('┗━━━━━━━━━━━━━━━━━━━━━━━━
 log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
 log('⚡ Optimized for 16MB flash with 921600 baud', 'info');
 log('Ready to connect device...', 'info');
+
+// Inițializare comandă specială: Adaugă un buton nou în secțiunea Happy Write doar dacă e ESP8266 conectat
+const writeSection = el.writeBtn.parentElement;
+const esp8266ForceBtn = document.createElement('button');
+esp8266ForceBtn.id = 'esp8266ForceBtn';
+esp8266ForceBtn.className = 'btn-write';
+esp8266ForceBtn.textContent = 'FORCE ESP8266 MODE';
+esp8266ForceBtn.disabled = true;
+esp8266ForceBtn.style.display = 'none';
+esp8266ForceBtn.onclick = forceESP8266DownloadMode;
+writeSection.appendChild(esp8266ForceBtn);
+
+// Actualizează vizibilitatea butonului la connect
+const originalConnect = connect;
+connect = async () => {
+  await originalConnect();
+  if (state.chipFamily === 'ESP8266') {
+    esp8266ForceBtn.style.display = 'block';
+    esp8266ForceBtn.disabled = false;
+    log('⚠ For ESP8266 write: Use FORCE ESP8266 MODE before HAPPY WRITE if LED not lighting.', 'warning');
+  } else {
+    esp8266ForceBtn.style.display = 'none';
+  }
+};
 </script>
 </body>
 </html>
