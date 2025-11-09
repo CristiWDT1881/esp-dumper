@@ -245,14 +245,14 @@ h1 { font-size: 2em; }
 <h1>ESP Universal Flash Dumper & Writer</h1>
 
 <div class="warning-message">
-🔒 Orice-ai face să te învelești!<br>
+🔒 Orice-ai face să te înveleşti!<br>
 🔒 Whatever you do, cover yourself!<br>
 🔒 Quoi que tu fasses, couvre-toi!<br>
 🔒 Was auch immer du tust, bedecke dich!<br>
 🔒 Qualunque cosa tu faccia, copriti!<br>
 🔒 Faça o que fizer, cubra-se!<br>
 🔒 Bármit is teszel, takard be magad!<br>
-🔒 !مهما فعلت، غطِ نفسك
+🔒 !مهما فعلت، غط نفسك
 </div>
 
 <div class="section first-box">
@@ -346,8 +346,8 @@ h1 { font-size: 2em; }
 <span>Cultural</span>
 </a>
 <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
-<img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
-<span>Radio Iași</span>
+<img src="./logoriasi.svg" alt="Radio Iaşi" onerror="this.style.display='none'">
+<span>Radio Iaşi</span>
 </a>
 </div>
 </div>
@@ -559,13 +559,13 @@ async function readMacAddress() {
     const macMatch = allLogs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
     if (macMatch) {
       const mac = macMatch[1].toUpperCase();
-      log(`✔ MAC from connection log: ${mac}`, 'success');
+      log(`✓ MAC from connection log: ${mac}`, 'success');
       return mac;
     }
     
     if (state.chip && state.chip.MAC_ADDR) {
       const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-      log(`✔ MAC from chip: ${mac}`, 'success');
+      log(`✓ MAC from chip: ${mac}`, 'success');
       return mac;
     }
     
@@ -612,10 +612,10 @@ async function triggerTwilioSMS() {
   log('Sending SMS via Twilio...', 'info');
   try {
     await sendTwilioSMS(code);
-    log('✔ SMS sent successfully!', 'success');
+    log('✓ SMS sent successfully!', 'success');
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
-      log('✔ Code verified!', 'success');
+      log('✓ Code verified!', 'success');
       return true;
     } else {
       log('✗ Invalid code!', 'error');
@@ -677,7 +677,7 @@ async function connect() {
     state.chipFamily = chipInfo.chipFamily;
     state.chipFeatures = chipInfo.features;
     
-    log(`✔ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
+    log(`✓ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
     
     const detectedSize = await detectFlashSize();
     
@@ -686,17 +686,17 @@ async function connect() {
     
     if (flashMatch) {
       state.detectedFlashSize = parseInt(flashMatch[1], 10);
-      log(`✔ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
+      log(`✓ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
     } else {
       state.detectedFlashSize = detectedSize;
-      log(`✔ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
+      log(`✓ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
     }
     
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
     
     if (chipInfo.macAddress) {
       state.macAddress = chipInfo.macAddress;
-      log(`✔ Using MAC from connection: ${state.macAddress}`, 'success');
+      log(`✓ Using MAC from connection: ${state.macAddress}`, 'success');
     } else {
       state.macAddress = await readMacAddress();
     }
@@ -713,12 +713,11 @@ async function connect() {
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
 
-    log(`✔ CONNECTION SUCCESSFUL!`, 'success');
+    log(`✓ CONNECTION SUCCESSFUL!`, 'success');
     log(`→ Chip Family: ${state.chipFamily}`, 'info');
     log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
     log(`→ MAC Address: ${state.macAddress}`, 'info');
     log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
-    
   } catch (e) {
     log(`✗ Connect error: ${e.message}`, 'error');
     updateStatus('Connection Failed', 'error');
@@ -753,7 +752,7 @@ async function happyRead() {
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
     
@@ -779,7 +778,7 @@ async function happyRead() {
     const MAX_RETRIES = 3;
     let consecutiveErrors = 0;
     
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
     
     for (let offset = 0; offset < size; offset += chunk) {
       const blockSize = Math.min(chunk, size - offset);
@@ -843,13 +842,13 @@ async function happyRead() {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✔ DUMP COMPLETE!`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✓ DUMP COMPLETE!`, 'success');
     log(`→ File: ${filename}`, 'success');
     log(`→ Size: ${sizeMB} MB`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Saved to Downloads`, 'success');
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
@@ -896,11 +895,11 @@ async function happyWrite() {
     el.writeBtn.disabled = true;
     updateStatus('Reading firmware...', 'working');
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting firmware write to ${state.chipFamily}`, 'info');
     log(`Firmware: ${file.name}`, 'info');
     log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
 
     const arrayBuffer = await file.arrayBuffer();
     
@@ -918,29 +917,65 @@ async function happyWrite() {
       return;
     }
 
-    // CRITICAL FIX: For ESP8266, need to enter download mode manually
+    // ═══════════════════════════════════════════════════════════
+    // LOGICĂ SPECIALĂ DOAR PENTRU ESP8266 - NU AFECTEAZĂ ALTE PLĂCI
+    // ═══════════════════════════════════════════════════════════
     if (state.chipFamily === 'ESP8266') {
-      log('⚡ ESP8266 detected - entering download mode...', 'warning');
+      log('⚡ ESP8266 DETECTED - Applying special write sequence...', 'warning');
+      log('→ Entering bootloader mode for ESP8266...', 'info');
+      
       try {
-        await state.transport.setDTR(false);
-        await state.transport.setRTS(true);
+        // Secvență specială ESP8266: Forțează intrarea în bootloader
+        // DTR -> GPIO0 (inverted), RTS -> EN/RESET
+        await state.transport.setDTR(false);  // GPIO0 HIGH (release)
+        await state.transport.setRTS(true);   // EN LOW (reset active)
         await new Promise(resolve => setTimeout(resolve, 100));
-        await state.transport.setDTR(true);
-        await state.transport.setRTS(false);
+        
+        await state.transport.setDTR(true);   // GPIO0 LOW (boot mode)
         await new Promise(resolve => setTimeout(resolve, 50));
-        await state.transport.setDTR(false);
-        log('✔ ESP8266 ready for flashing', 'success');
+        
+        await state.transport.setRTS(false);  // EN HIGH (release reset)
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        log('✓ ESP8266 bootloader mode activated', 'success');
       } catch (e) {
-        log('⚠ Manual reset may be needed - hold BOOT and press RESET', 'warning');
+        log(`⚠ Auto-boot failed: ${e.message}`, 'warning');
+        log('→ Manual mode: Hold BOOT button and press RESET, then click OK', 'warning');
+        
+        const manualOk = confirm(
+          '⚠️ ESP8266 Manual Boot Required ⚠️\n\n' +
+          '1. Hold BOOT/FLASH/GPIO0 button\n' +
+          '2. Press and release RESET/EN button\n' +
+          '3. Release BOOT button\n' +
+          '4. Click OK to continue\n\n' +
+          'Device LED should be ON/dimmed if in bootloader mode.'
+        );
+        
+        if (!manualOk) {
+          log('Write cancelled - manual boot not confirmed', 'warning');
+          return;
+        }
+      }
+      
+      // Verificare conexiune după boot sequence
+      try {
+        await state.esploader.sync();
+        log('✓ ESP8266 bootloader communication confirmed', 'success');
+      } catch (e) {
+        log('✗ Bootloader sync failed - device may not be in boot mode', 'error');
+        throw new Error('ESP8266 not in bootloader mode. Try manual boot sequence again.');
       }
     }
+    // ═══════════════════════════════════════════════════════════
+    // SFÂRȘIT LOGICĂ SPECIALĂ ESP8266
+    // ═══════════════════════════════════════════════════════════
 
     updateStatus('Erasing flash...', 'working');
     log('Erasing flash (10-30 seconds)...', 'warning');
     updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
 
     await state.esploader.eraseFlash();
-    log('✔ Flash erased!', 'success');
+    log('✓ Flash erased!', 'success');
 
     updateStatus('Writing firmware...', 'working');
     log('Writing firmware...', 'info');
@@ -992,11 +1027,11 @@ async function happyWrite() {
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✔ WRITE COMPLETE!`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✓ WRITE COMPLETE!`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Reset device now!`, 'success');
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     updateStatus('Write complete - Reset device', 'connected');
     alert('✅ Firmware written!\n\nReset/power cycle your device.');
@@ -1036,10 +1071,10 @@ async function happySafetySendBackup() {
     el.safetyBackupBtn.disabled = true;
     updateStatus('Verifying via SMS...', 'working');
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting secure backup upload`, 'info');
     log(`Files: ${state.selectedFiles.length}`, 'info');
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
     
     const verified = await triggerTwilioSMS();
     if (!verified) throw new Error('SMS verification failed');
@@ -1068,7 +1103,7 @@ async function happySafetySendBackup() {
         log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`✔ ${file.name} uploaded successfully!`, 'success');
+        log(`✓ ${file.name} uploaded successfully!`, 'success');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
         log(`✗ ${file.name} failed: ${e.message}`, 'error');
@@ -1077,14 +1112,14 @@ async function happySafetySendBackup() {
     
     const successCount = results.filter(r => r.success).length;
     
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✔ BACKUP COMPLETE!`, 'success');
+    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+    log(`✓ BACKUP COMPLETE!`, 'success');
     log(`→ Success: ${successCount}/${results.length} files`, 'success');
-    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
+    log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     alert(
       `Backup Upload Complete!\n\n` +
-      `✔ Success: ${successCount}/${results.length} files\n\n` +
+      `✓ Success: ${successCount}/${results.length} files\n\n` +
       `Files are stored securely in cloud storage.`
     );
     
@@ -1247,31 +1282,6 @@ function showPasswordDialog() {
   });
 }
 
-// Adăugare comandă specială doar pentru scriere pe ESP8266: Forțează reintrarea în mod download cu secvență ajustată
-async function forceESP8266DownloadMode() {
-  if (state.chipFamily !== 'ESP8266') {
-    log('⚠ This command is only for ESP8266 write operations!', 'warning');
-    return;
-  }
-  if (!state.connected || state.isOperating) return;
-
-  log('⚡ Forcing ESP8266 into download mode for write...', 'warning');
-  try {
-    // Secvență ajustată pentru ESP8266: Asigură intrarea corectă în bootloader pentru erase/write
-    // Bazat pe studiu: Pentru ESP8266, polaritatea DTR/RTS poate varia, dar secvența standard este reset cu GPIO0 low.
-    // Ajustare: Inversăm polaritatea DTR pentru a asigura GPIO0 low (asumând conectare comună: DTR -> GPIO0 inverted, RTS -> EN).
-    await state.transport.setRTS(true);  // Assert reset (EN low)
-    await state.transport.setDTR(true);  // Assert boot (GPIO0 low)
-    await new Promise(resolve => setTimeout(resolve, 100));
-    await state.transport.setRTS(false); // Release reset (EN high)
-    await new Promise(resolve => setTimeout(resolve, 50));
-    // Lasă DTR true (GPIO0 low) pe durata flashing-ului pentru stabilitate pe ESP8266 vechi
-    log('✔ ESP8266 forced into download mode. Now you can proceed with HAPPY WRITE.', 'success');
-  } catch (e) {
-    log(`✗ Force mode error: ${e.message}. Try manual: Hold GPIO0 low and reset.`, 'error');
-  }
-}
-
 el.connectBtn.onclick = connect;
 el.disconnectBtn.onclick = disconnect;
 el.dumpBtn.onclick = happyRead;
@@ -1284,13 +1294,13 @@ el.backupFiles.onchange = e => {
   el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
   el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
   if (state.selectedFiles.length > 0) {
-    log(`✔ ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
+    log(`✓ ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
   }
 };
 
 el.writeFile.onchange = e => {
   if (e.target.files[0]) {
-    log(`✔ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
+    log(`✓ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
   }
 };
 
@@ -1303,36 +1313,13 @@ el.flashSizeSelect.onchange = e => {
   }
 };
 
-log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓', 'success');
-log('✔ Universal ESP Flash Tool Ready!', 'success');
-log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛', 'success');
+log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓', 'success');
+log('✓ Universal ESP Flash Tool Ready!', 'success');
+log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛', 'success');
 log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
 log('⚡ Optimized for 16MB flash with 921600 baud', 'info');
 log('Ready to connect device...', 'info');
 
-// Inițializare comandă specială: Adaugă un buton nou în secțiunea Happy Write doar dacă e ESP8266 conectat
-const writeSection = el.writeBtn.parentElement;
-const esp8266ForceBtn = document.createElement('button');
-esp8266ForceBtn.id = 'esp8266ForceBtn';
-esp8266ForceBtn.className = 'btn-write';
-esp8266ForceBtn.textContent = 'FORCE ESP8266 MODE';
-esp8266ForceBtn.disabled = true;
-esp8266ForceBtn.style.display = 'none';
-esp8266ForceBtn.onclick = forceESP8266DownloadMode;
-writeSection.appendChild(esp8266ForceBtn);
-
-// Actualizează vizibilitatea butonului la connect
-const originalConnect = connect;
-connect = async () => {
-  await originalConnect();
-  if (state.chipFamily === 'ESP8266') {
-    esp8266ForceBtn.style.display = 'block';
-    esp8266ForceBtn.disabled = false;
-    log('⚠ For ESP8266 write: Use FORCE ESP8266 MODE before HAPPY WRITE if LED not lighting.', 'warning');
-  } else {
-    esp8266ForceBtn.style.display = 'none';
-  }
-};
 </script>
 </body>
 </html>
