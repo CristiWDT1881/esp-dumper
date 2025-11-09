@@ -7,8 +7,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-<!-- ESP8266 Special: esp-web-tools pentru flash compatibil -->
-<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -232,8 +230,7 @@ color: #1a5f3f;
 line-height: 1.8;
 box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 }
-/* ESP8266 Special Flash Mode */
-.esp8266-mode {
+.esp8266-notice {
 background: #fff3cd;
 border: 4px solid #ffc107;
 padding: 15px;
@@ -241,15 +238,16 @@ border-radius: 12px;
 margin-top: 10px;
 display: none;
 }
-.esp8266-mode.active { display: block; }
-.esp8266-mode h3 {
+.esp8266-notice.active { display: block; }
+.esp8266-notice h3 {
 color: #856404;
 margin-bottom: 10px;
-font-size: 1.2em;
+font-size: 1.1em;
 }
-.esp8266-mode p {
+.esp8266-notice p {
 color: #856404;
-margin-bottom: 8px;
+margin-bottom: 5px;
+font-size: 0.95em;
 }
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
@@ -344,21 +342,17 @@ h1 { font-size: 2em; }
 <label>Select Firmware File:</label>
 <input type="file" id="writeFile" accept=".bin">
 </div>
+<div id="esp8266Notice" class="esp8266-notice">
+<h3>⚡ ESP8266 Detected - Optimized Write Mode</h3>
+<p>• Using proven ESP8266 flash method (Espruino-style)</p>
+<p>• Already connected via USB - no need to reconnect</p>
+<p>• Click HAPPY WRITE below to start flashing</p>
+</div>
 <div class="button-group">
 <button id="writeBtn" class="btn-write" disabled>HAPPY WRITE</button>
 </div>
 <div id="writeProgress" class="progress-bar">
 <div id="writeProgressFill" class="progress-fill">0%</div>
-</div>
-<!-- ESP8266 Special Mode -->
-<div id="esp8266Mode" class="esp8266-mode">
-<h3>⚡ ESP8266 Detected - Using Espruino Method</h3>
-<p>For ESP8266, we use the proven esp-web-tools library (same as Espruino.com)</p>
-<p><strong>Instructions:</strong></p>
-<p>1. Click the button below to start ESP8266-optimized flashing</p>
-<p>2. Select your COM port</p>
-<p>3. Follow on-screen prompts</p>
-<div id="esp8266FlashContainer" style="margin-top: 10px;"></div>
 </div>
 </div>
 
@@ -431,8 +425,7 @@ const state = {
   flashSizeMode: 'auto', 
   selectedFiles: [], 
   smsCode: null,
-  logBuffer: [],
-  esp8266ManifestUrl: null // For ESP8266 special mode
+  logBuffer: []
 };
 
 const el = {
@@ -457,8 +450,7 @@ const el = {
   flashSizeSelect: document.getElementById('flashSizeSelect'),
   selectedFilesInfo: document.getElementById('selectedFilesInfo'),
   fileListContainer: document.getElementById('fileListContainer'),
-  esp8266Mode: document.getElementById('esp8266Mode'),
-  esp8266FlashContainer: document.getElementById('esp8266FlashContainer')
+  esp8266Notice: document.getElementById('esp8266Notice')
 };
 
 function log(msg, type = 'info') {
@@ -662,76 +654,6 @@ async function triggerTwilioSMS() {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// ESP8266 SPECIAL: Create dynamic manifest for esp-web-tools
-// ═══════════════════════════════════════════════════════════
-async function createESP8266Manifest(firmwareFile) {
-  const arrayBuffer = await firmwareFile.arrayBuffer();
-  const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
-  const firmwareUrl = URL.createObjectURL(blob);
-  
-  const manifest = {
-    name: "ESP8266 Custom Firmware",
-    version: new Date().toISOString().split('T')[0],
-    home_assistant_domain: "esphome",
-    new_install_skip_erase: false,
-    builds: [{
-      chipFamily: "ESP8266",
-      parts: [{
-        path: firmwareUrl,
-        offset: 0
-      }]
-    }]
-  };
-  
-  const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-  const manifestUrl = URL.createObjectURL(manifestBlob);
-  
-  log('✓ ESP8266 manifest created dynamically', 'success');
-  return manifestUrl;
-}
-
-function activateESP8266Mode() {
-  el.esp8266Mode.classList.add('active');
-  el.writeBtn.style.display = 'none';
-  
-  log('⚡ ESP8266 MODE ACTIVATED - Using Espruino method', 'warning');
-  log('→ This uses the proven esp-web-tools library', 'info');
-}
-
-function deactivateESP8266Mode() {
-  el.esp8266Mode.classList.remove('active');
-  el.writeBtn.style.display = 'block';
-  el.esp8266FlashContainer.innerHTML = '';
-}
-
-async function setupESP8266WebTools() {
-  const file = el.writeFile.files[0];
-  if (!file) {
-    alert('Please select a firmware file first!');
-    return;
-  }
-  
-  log('Setting up ESP8266 web-tools flasher...', 'info');
-  
-  try {
-    state.esp8266ManifestUrl = await createESP8266Manifest(file);
-    
-    el.esp8266FlashContainer.innerHTML = `
-      <esp-web-install-button manifest="${state.esp8266ManifestUrl}">
-        <button slot="activate" class="btn-write" style="width: 100%; padding: 15px; font-size: 1.2em;">
-          ⚡ FLASH ESP8266 (Espruino Method)
-        </button>
-      </esp-web-install-button>
-    `;
-    
-    log('✓ ESP8266 flasher ready! Click the button above to flash.', 'success');
-  } catch (e) {
-    log(`✗ ESP8266 setup error: ${e.message}`, 'error');
-    alert(`ESP8266 setup failed: ${e.message}`);
-  }
-}
-
 async function connect() {
   try {
     if (!('serial' in navigator)) {
@@ -824,13 +746,14 @@ async function connect() {
     log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
     
     // ═══════════════════════════════════════════════════════════
-    // ESP8266 SPECIAL: Activate Espruino-style flashing
+    // ESP8266 SPECIAL: Show notice but keep existing connection
     // ═══════════════════════════════════════════════════════════
     if (state.chipFamily === 'ESP8266') {
-      log('⚡ ESP8266 detected - Activating Espruino flash method', 'warning');
-      activateESP8266Mode();
+      log('⚡ ESP8266 detected - Using optimized flash method', 'warning');
+      log('→ Connection maintained - no need to reconnect USB', 'info');
+      el.esp8266Notice.classList.add('active');
     } else {
-      deactivateESP8266Mode();
+      el.esp8266Notice.classList.remove('active');
     }
     
   } catch (e) {
@@ -845,7 +768,7 @@ async function disconnect() {
     if (state.transport) await state.transport.disconnect();
     state.connected = false;
     state.logBuffer = [];
-    deactivateESP8266Mode();
+    el.esp8266Notice.classList.remove('active');
     updateStatus('Disconnected');
     el.deviceInfo.style.display = 'none';
     el.connectBtn.disabled = false; 
@@ -977,19 +900,149 @@ async function happyRead() {
   }
 }
 
-async function happyWrite() {
-  // ═══════════════════════════════════════════════════════════
-  // ESP8266 SPECIAL: Use esp-web-tools instead
-  // ═══════════════════════════════════════════════════════════
-  if (state.chipFamily === 'ESP8266') {
-    log('⚡ ESP8266 detected - Redirecting to Espruino method', 'warning');
-    await setupESP8266WebTools();
+// ═══════════════════════════════════════════════════════════
+// ESP8266 SPECIAL WRITE - Using existing connection
+// ═══════════════════════════════════════════════════════════
+async function writeESP8266(file) {
+  const fileSize = file.size;
+  const flashSize = getEffectiveFlashBytes();
+  
+  log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
+  log(`ESP8266 OPTIMIZED WRITE MODE`, 'warning');
+  log(`Firmware: ${file.name}`, 'info');
+  log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
+  log(`Using existing USB connection - no reconnect needed`, 'info');
+  log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'info');
+
+  const arrayBuffer = await file.arrayBuffer();
+  
+  const confirmWrite = window.confirm(
+    `⚠️ ESP8266 FLASH WARNING ⚠️\n\n` +
+    `This will ERASE and WRITE the entire flash!\n\n` +
+    `Chip: ${state.chipType}\n` +
+    `Firmware: ${file.name}\n` +
+    `Size: ${(fileSize/1024/1024).toFixed(2)} MB\n\n` +
+    `Using optimized ESP8266 method.\n\n` +
+    `Continue?`
+  );
+
+  if (!confirmWrite) {
+    log('Write cancelled by user', 'warning');
     return;
   }
+
+  // ESP8266 Special: Enter bootloader mode with optimized timing
+  try {
+    log('⚡ Preparing ESP8266 for flash operation...', 'info');
+    
+    // ESP8266-specific bootloader entry sequence
+    await state.transport.setDTR(false);
+    await state.transport.setRTS(true);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await state.transport.setDTR(true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await state.transport.setRTS(false);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Verify bootloader communication
+    await state.esploader.sync();
+    log('✓ ESP8266 bootloader ready', 'success');
+  } catch (e) {
+    log(`⚠ Auto-boot preparation: ${e.message}`, 'warning');
+    log('→ Attempting manual bootloader mode...', 'info');
+    
+    const manualOk = confirm(
+      '⚠️ ESP8266 Manual Boot ⚠️\n\n' +
+      'Please:\n' +
+      '1. Hold BOOT/FLASH/GPIO0 button\n' +
+      '2. Press RESET button briefly\n' +
+      '3. Release BOOT button\n' +
+      '4. Click OK to continue\n\n' +
+      'LED should be ON or dimmed if ready.'
+    );
+    
+    if (!manualOk) {
+      throw new Error('Manual boot cancelled');
+    }
+    
+    try {
+      await state.esploader.sync();
+      log('✓ Manual bootloader mode confirmed', 'success');
+    } catch (syncErr) {
+      throw new Error('ESP8266 not in bootloader mode. Please retry.');
+    }
+  }
+
+  updateStatus('Erasing ESP8266 flash...', 'working');
+  log('Erasing flash (this may take 10-30 seconds)...', 'warning');
+  updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
+
+  await state.esploader.eraseFlash();
+  log('✓ Flash erased successfully!', 'success');
+
+  updateStatus('Writing firmware to ESP8266...', 'working');
+  log('Writing firmware...', 'info');
+  updateProgress(el.writeProgress, el.writeProgressFill, 10, 'Writing...');
+
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let binaryString = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    binaryString += String.fromCharCode(uint8Array[i]);
+  }
+
+  const fileArray = [{
+    data: binaryString,
+    address: 0x0
+  }];
+
+  let lastLogPercent = 0;
+  const startTime = Date.now();
+
+  await state.esploader.writeFlash({
+    fileArray: fileArray,
+    flashSize: 'keep',
+    flashMode: 'keep',
+    flashFreq: 'keep',
+    eraseAll: false,
+    compress: true,
+    reportProgress: (fileIndex, written, total) => {
+      const progress = 10 + ((written / total) * 90);
+      updateProgress(el.writeProgress, el.writeProgressFill, progress);
+      
+      const pct = Math.floor((written / total) * 100);
+      if (pct - lastLogPercent >= 10) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const mbWritten = (written / 1024 / 1024).toFixed(1);
+        const mbTotal = (total / 1024 / 1024).toFixed(1);
+        const speed = ((written / 1024 / 1024) / parseFloat(elapsed)).toFixed(2);
+        log(`${pct}% | ${mbWritten}/${mbTotal} MB | ${speed} MB/s | ${elapsed}s`, 'info');
+        lastLogPercent = pct;
+      }
+    },
+    calculateMD5Hash: (image) => {
+      const wordArray = CryptoJS.enc.Latin1.parse(image);
+      return CryptoJS.MD5(wordArray).toString();
+    }
+  });
+
+  const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  const avgSpeed = ((fileSize / 1024 / 1024) / parseFloat(totalTime)).toFixed(2);
+
+  updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
   
-  // ═══════════════════════════════════════════════════════════
-  // NORMAL WRITE FOR ESP32 AND OTHER CHIPS
-  // ═══════════════════════════════════════════════════════════
+  log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
+  log(`✓ ESP8266 WRITE COMPLETE!`, 'success');
+  log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+  log(`→ Reset/power cycle your ESP8266 now!`, 'success');
+  log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
+  
+  updateStatus('Write complete - Reset ESP8266', 'connected');
+  alert('✅ ESP8266 Firmware written successfully!\n\nReset or power cycle your device now.');
+  
+  setTimeout(() => hideProgress(el.writeProgress), 3000);
+}
+
+async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
   const file = el.writeFile.files[0];
@@ -1023,6 +1076,17 @@ async function happyWrite() {
     el.writeBtn.disabled = true;
     updateStatus('Reading firmware...', 'working');
     
+    // ═══════════════════════════════════════════════════════════
+    // ESP8266 SPECIAL: Use optimized write with existing connection
+    // ═══════════════════════════════════════════════════════════
+    if (state.chipFamily === 'ESP8266') {
+      await writeESP8266(file);
+      return;
+    }
+    
+    // ═══════════════════════════════════════════════════════════
+    // NORMAL WRITE FOR ESP32 AND OTHER CHIPS
+    // ═══════════════════════════════════════════════════════════
     log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
     log(`Starting firmware write to ${state.chipFamily}`, 'info');
     log(`Firmware: ${file.name}`, 'info');
@@ -1376,10 +1440,6 @@ el.backupFiles.onchange = e => {
 el.writeFile.onchange = e => {
   if (e.target.files[0]) {
     log(`✓ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
-    // If ESP8266 is connected, prepare the flasher immediately
-    if (state.chipFamily === 'ESP8266' && state.connected) {
-      setupESP8266WebTools();
-    }
   }
 };
 
@@ -1397,7 +1457,7 @@ log('✓ Universal ESP Flash Tool Ready!', 'success');
 log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛', 'success');
 log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
 log('⚡ Optimized for 16MB flash with 921600 baud', 'info');
-log('⚡ ESP8266 uses Espruino-proven esp-web-tools method', 'info');
+log('⚡ ESP8266: Uses existing connection - no reconnect needed', 'info');
 log('Ready to connect device...', 'info');
 
 </script>
