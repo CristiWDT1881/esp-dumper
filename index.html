@@ -357,13 +357,9 @@ Bármit is teszel, takard be magad!<br>
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-const BACKBLAZE = {
-  keyId: '005334a4b31a9360000000007',
-  applicationKey: 'K005ajOLwAiPaMGV1jqzcmWoCD+7xaE',
-  bucketName: 'githubwdt81',
-  bucketId: '1303149a14db53119aa90316',
-  folder: 'Uploads'
-};
+// ✅ SIGUR - doar configurare publică (fără credențiale)
+const BACKBLAZE_FOLDER = 'Uploads';
+const BACKBLAZE_BUCKET = 'githubwdt81';
 
 const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
@@ -739,7 +735,7 @@ async function happyRead() {
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
     
@@ -1021,7 +1017,7 @@ async function happySafetySendBackup() {
     for (let i = 0; i < state.selectedFiles.length; i++) {
       const file = state.selectedFiles[i];
       const fileExt = file.name.substring(file.name.lastIndexOf('.'));
-      const uploadFileName = `${BACKBLAZE.folder}/${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
+      const uploadFileName = `${BACKBLAZE_FOLDER}/${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
       
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
@@ -1089,6 +1085,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     
     updateFileProgress(50, 'Uploading...');
     
+    // ✅ MODIFICAT - nu mai trimitem credențiale
     const resp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1096,10 +1093,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
         action: 'uploadSmallFile',
         fileBase64: base64,
         fileName: filename,
-        sha1: sha1,
-        keyId: BACKBLAZE.keyId,
-        applicationKey: BACKBLAZE.applicationKey,
-        bucketId: BACKBLAZE.bucketId
+        sha1: sha1
       })
     });
 
@@ -1111,16 +1105,14 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
   } else {
     log(`  → Large file mode (chunked upload)`, 'info');
     
+    // ✅ MODIFICAT - nu mai trimitem credențiale
     const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'startLargeFile',
         fileName: filename,
-        contentType: file.type || 'application/octet-stream',
-        keyId: BACKBLAZE.keyId,
-        applicationKey: BACKBLAZE.applicationKey,
-        bucketId: BACKBLAZE.bucketId
+        contentType: file.type || 'application/octet-stream'
       })
     });
     
@@ -1140,6 +1132,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
         new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
       );
       
+      // ✅ MODIFICAT - nu mai trimitem credențiale
       const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1148,10 +1141,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
           fileId: fileId,
           partNumber: partNum,
           partBase64: chunkBase64,
-          sha1: chunkSha1,
-          keyId: BACKBLAZE.keyId,
-          applicationKey: BACKBLAZE.applicationKey,
-          bucketId: BACKBLAZE.bucketId
+          sha1: chunkSha1
         })
       });
       
@@ -1164,6 +1154,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
       log(`  → Part ${partNum}/${totalChunks} uploaded`, 'info');
     }
     
+    // ✅ MODIFICAT - nu mai trimitem credențiale, DAR trimitem fileName
     const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1171,9 +1162,7 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
         action: 'finishLargeFile',
         fileId: fileId,
         partSha1Array: parts,
-        keyId: BACKBLAZE.keyId,
-        applicationKey: BACKBLAZE.applicationKey,
-        bucketId: BACKBLAZE.bucketId
+        fileName: filename
       })
     });
     
