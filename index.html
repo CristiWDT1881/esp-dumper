@@ -319,6 +319,7 @@ Bármit is teszel, takard be magad!<br>
 <h2>Happy Write - Write Flash</h2>
 <p><strong>1.</strong> Select firmware file (.bin)</p>
 <p><strong>2.</strong> Click HAPPY WRITE</p>
+<p><strong>3.</strong> System verifies compatibility (±25%)</p>
 <div class="control-group">
 <label>Select Firmware File:</label>
 <input type="file" id="writeFile" accept=".bin">
@@ -494,15 +495,19 @@ function parseChipInfoFromLogs(logs) {
     info.chipFamily = 'ESP32-C6';
   } else if (info.chipType.includes('H2')) {
     info.chipFamily = 'ESP32-H2';
-  } else if (info.chipType.includes('ESP32') && !info.chipType.includes('S') && !info.chipType.includes('C')) {
+  } else if (info.chipType.includes('ESP32')) {
     info.chipFamily = 'ESP32';
   }
   
   const featuresMatch = logs.match(/Features:\s*([^\n]+)/i);
-  if (featuresMatch) info.features = featuresMatch[1].trim();
+  if (featuresMatch) {
+    info.features = featuresMatch[1].trim();
+  }
   
   const macMatch = logs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
-  if (macMatch) info.macAddress = macMatch[1].toUpperCase();
+  if (macMatch) {
+    info.macAddress = macMatch[1].toUpperCase();
+  }
   
   const crystalMatch = logs.match(/Crystal is (\d+)MHz/i);
   if (crystalMatch) {
@@ -510,7 +515,9 @@ function parseChipInfoFromLogs(logs) {
   }
   
   const flashSizeMatch = logs.match(/Detected flash size:\s*(\d+)MB/i);
-  if (flashSizeMatch) info.flashSize = parseInt(flashSizeMatch[1], 10);
+  if (flashSizeMatch) {
+    info.flashSize = parseInt(flashSizeMatch[1], 10);
+  }
   
   return info;
 }
@@ -608,6 +615,7 @@ async function triggerTwilioSMS() {
   }
 }
 
+// === CONNECT – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function connect() {
   try {
     if (!('serial' in navigator)) {
@@ -693,95 +701,121 @@ async function connect() {
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
 
     log(`CONNECTION SUCCESSFUL!`, 'success');
-    log(`→ Chip Family: ${state.chipFamily}`, 'success');
+    log(`→ Chip Family: ${state.chipFamily}`, 'info');
+    log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
+    log(`→ MAC Address: ${state.macAddress}`, 'info');
+    log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
+    
   } catch (e) {
-    log(`Connection failed: ${e.message}`, 'error');
-    updateStatus('Connection failed', 'error');
+    log(`Connect error: ${e.message}`, 'error');
+    updateStatus('Connection Failed', 'error');
+    alert(`Eroare: ${e.message}`);
   }
 }
 
 async function disconnect() {
-  if (state.connected) {
-    try {
-      if (state.esploader) await state.esploader.disconnect();
-      if (state.transport) await state.transport.disconnect();
-      if (state.port) await state.port.close();
-    } catch (e) {
-      log(`Disconnect error: ${e.message}`, 'warning');
-    }
+  try {
+    if (state.transport) await state.transport.disconnect();
     state.connected = false;
-    state.chip = null;
-    state.esploader = null;
-    state.transport = null;
-    state.port = null;
-    el.deviceInfo.style.display = 'none';
+    state.logBuffer = [];
     updateStatus('Disconnected');
-    el.connectBtn.disabled = false;
+    el.deviceInfo.style.display = 'none';
+    el.connectBtn.disabled = false; 
     el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = true;
-    log('Disconnected', 'info');
+    log('Disconnected from device', '
+    info');
+  } catch (e) { 
+    log(`Disconnect error: ${e.message}`, 'error'); 
   }
 }
 
-// === HAPPY READ – 100% STABILĂ ===
+// === HAPPY READ – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   
-  state.isOperating = true;
-  el.dumpBtn.disabled = true;
-  updateStatus('Reading flash...', 'working');
-
-  const size = getEffectiveFlashBytes();
-  const sizeMB = getEffectiveFlashSize();
-  
-  log(`Starting flash dump: ${sizeMB} MB`, 'info');
-  
   try {
-    const data = new Uint8Array(size);
-    const isESP8266 = state.chipFamily === 'ESP8266';
-    const isLarge = sizeMB >= 16;
+    state.isOperating = true; 
+    el.dumpBtn.disabled = true;
+    updateStatus('Reading flash...', 'working');
+
+    const size = getEffectiveFlashBytes();
+    const sizeMB = getEffectiveFlashSize();
     
-    const chunk = isESP8266 ? 0x1000 : (isLarge ? 0x8000 : 0x4000);
-    log(`Using chunk size: ${chunk} bytes`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`Starting flash dump for ${state.chipFamily}`, 'info');
+    log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
+    
+    const data = new Uint8Array(size);
+    
+    let chunk;
+    if (sizeMB >= 16) {
+      chunk = 0x4000;
+      log('⚡ Using optimized 16KB chunks for 16MB flash', 'info');
+    } else if (sizeMB >= 8) {
+      chunk = 0x4000;
+      log('⚡ Using optimized 16KB chunks for 8MB flash', 'info');
+    } else if (state.chipFamily === 'ESP8266') {
+      chunk = 0x1000;
+      log('Using ESP8266 optimized 4KB chunks', 'info');
+    } else {
+      chunk = 0x4000;
+      log('Using standard 16KB chunks', 'info');
+    }
 
     const startTime = Date.now();
     let lastLogPercent = -5;
-    let offset = 0;
-
-    while (offset < size) {
+    const MAX_RETRIES = 3;
+    let consecutiveErrors = 0;
+    
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    
+    for (let offset = 0; offset < size; offset += chunk) {
       const blockSize = Math.min(chunk, size - offset);
       let success = false;
       let attempts = 0;
-      const maxRetries = 5;
-
-      while (!success && attempts < maxRetries) {
+      
+      while (!success && attempts < MAX_RETRIES) {
         try {
           const block = await state.esploader.readFlash(offset, blockSize);
           data.set(new Uint8Array(block), offset);
           success = true;
+          consecutiveErrors = 0;
         } catch (e) {
           attempts++;
-          log(`Retry ${attempts}/${maxRetries} at 0x${offset.toString(16)}: ${e.message}`, 'warning');
-          await new Promise(r => setTimeout(r, 200 * attempts));
+          consecutiveErrors++;
+          
+          if (consecutiveErrors >= 10) {
+            throw new Error(`Too many errors. Last: ${e.message}`);
+          }
+          
+          if (attempts < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 100 * attempts));
+          } else {
+            throw new Error(`Failed at 0x${offset.toString(16)} after ${MAX_RETRIES} attempts: ${e.message}`);
+          }
         }
       }
-
-      if (!success) throw new Error(`Failed after ${maxRetries} retries at 0x${offset.toString(16)}`);
-
-      offset += blockSize;
-      const progress = (offset / size) * 100;
+      
+      const progress = ((offset + blockSize) / size) * 100;
       updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
-
+      
       const currentPercent = Math.floor(progress);
       if (currentPercent - lastLogPercent >= 5) {
-        const elapsed = (Date.now() - startTime) / 1000;
-        const speed = (offset / 1024 / 1024 / elapsed).toFixed(2);
-        log(`${currentPercent}% | ${speed} MB/s`, 'info');
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const mbRead = (offset + blockSize) / (1024 * 1024);
+        const speed = mbRead / elapsedSec;
+        const remaining = (size - offset - blockSize) / (1024 * 1024);
+        const etaSec = Math.ceil(remaining / speed);
+        const etaMin = Math.floor(etaSec / 60);
+        const etaSecRem = etaSec % 60;
+        
+        log(`${currentPercent}% | ${mbRead.toFixed(1)}/${sizeMB} MB | ${speed.toFixed(2)} MB/s | ETA: ${etaMin}:${etaSecRem.toString().padStart(2,'0')}`, 'info');
         lastLogPercent = currentPercent;
       }
-
-      if (offset % (512 * 1024) === 0) {
-        await new Promise(r => setTimeout(r, 10));
+      
+      if (offset % (256 * 1024) === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
 
@@ -792,101 +826,160 @@ async function happyRead() {
     const blob = new Blob([data], { type: 'application/octet-stream' });
     saveAs(blob, filename);
     
-    state.lastDumpData = data;
+    state.lastDumpData = data; 
     state.lastDumpFilename = filename;
 
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
-    log(`DUMP COMPLETE: ${filename} (${totalTime}s, ${avgSpeed} MB/s)`, 'success');
-    updateStatus('Dump complete', 'connected');
-
-  } catch (e) {
-    log(`READ FAILED: ${e.message}`, 'error');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`✓ DUMP COMPLETE!`, 'success');
+    log(`→ File: ${filename}`, 'success');
+    log(`→ Size: ${sizeMB} MB`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Saved to Downloads`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    
+    updateStatus(`Read complete: ${filename}`, 'connected');
+  } catch (e) { 
+    log(`✗ Read error: ${e.message}`, 'error');
     updateStatus('Read failed', 'error');
-    alert(`Read error: ${e.message}\nTry reconnecting.`);
-  } finally {
-    state.isOperating = false;
-    el.dumpBtn.disabled = false;
+    alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting.`);
+  } finally { 
+    state.isOperating = false; 
+    el.dumpBtn.disabled = false; 
   }
 }
 
-// === HAPPY WRITE – PLACA PORNEȘTE ===
+// === HAPPY WRITE – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
   const file = el.writeFile.files[0];
-  if (!file) return alert('Select firmware file!');
+  if (!file) {
+    alert('Please select a firmware file first!');
+    return;
+  }
 
   const fileSize = file.size;
   const flashSize = getEffectiveFlashBytes();
-  const isESP8266 = state.chipFamily === 'ESP8266';
-
-  if (fileSize > flashSize * 1.1) {
-    if (!confirm(`Firmware too big! Continue?`)) return;
+  
+  const minSize = flashSize * 0.75;
+  const maxSize = flashSize * 1.25;
+  
+  if (fileSize < minSize || fileSize > maxSize) {
+    const proceed = confirm(
+      `⚠️ WARNING: Size Mismatch ⚠️\n\n` +
+      `File size: ${(fileSize/1024/1024).toFixed(2)} MB\n` +
+      `Flash size: ${getEffectiveFlashSize()} MB\n\n` +
+      `This firmware may be incompatible with ${state.chipFamily}.\n\n` +
+      `Continue anyway?`
+    );
+    if (!proceed) {
+      log('Write cancelled - size mismatch', 'warning');
+      return;
+    }
   }
 
-  state.isOperating = true;
-  el.writeBtn.disabled = true;
-  updateStatus('Writing flash...', 'working');
-
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
+    state.isOperating = true;
+    el.writeBtn.disabled = true;
+    updateStatus('Reading firmware...', 'working');
+    
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`Starting firmware write to ${state.chipFamily}`, 'info');
+    log(`Firmware: ${file.name}`, 'info');
+    log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
 
-    if (isESP8266) {
-      log('ESP8266: Entering bootloader...', 'warning');
-      try {
-        await state.transport.setDTR(false);
-        await state.transport.setRTS(true);
-        await new Promise(r => setTimeout(r, 100));
-        await state.transport.setDTR(true);
-        await new Promise(r => setTimeout(r, 50));
-        await state.transport.setRTS(false);
-        await new Promise(r => setTimeout(r, 100));
-        await state.esploader.sync();
-        log('ESP8266 in bootloader', 'success');
-      } catch (e) {
-        if (!confirm('Manual boot required. Hold BOOT, press RESET, release BOOT. Continue?')) return;
-      }
+    const arrayBuffer = await file.arrayBuffer();
+    
+    const confirmWrite = window.confirm(
+      `⚠️ FINAL WARNING ⚠️\n\n` +
+      `This will ERASE and WRITE the entire flash!\n\n` +
+      `Chip: ${state.chipType}\n` +
+      `Firmware: ${file.name}\n` +
+      `Size: ${(fileSize/1024/1024).toFixed(2)} MB\n\n` +
+      `Continue?`
+    );
+
+    if (!confirmWrite) {
+      log('Write cancelled by user', 'warning');
+      return;
     }
 
     updateStatus('Erasing flash...', 'working');
-    log('Erasing flash...', 'info');
-    if (!isESP8266) {
-      await state.esploader.eraseFlash();
-    } else {
-      log('ESP8266: Erase during write', 'info');
-    }
+    log('Erasing flash (10-30 seconds)...', 'warning');
+    updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
+
+    await state.esploader.eraseFlash();
+    log('✓ Flash erased!', 'success');
 
     updateStatus('Writing firmware...', 'working');
-    const fileArray = [{ data: uint8Array, address: 0x0 }];
+    log('Writing firmware...', 'info');
+    updateProgress(el.writeProgress, el.writeProgressFill, 10, 'Writing...');
+
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binaryString = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binaryString += String.fromCharCode(uint8Array[i]);
+    }
+
+    const fileArray = [{
+      data: binaryString,
+      address: 0x0
+    }];
+
+    let lastLogPercent = 0;
     const startTime = Date.now();
 
     await state.esploader.writeFlash({
-      fileArray,
+      fileArray: fileArray,
       flashSize: 'keep',
       flashMode: 'keep',
       flashFreq: 'keep',
-      eraseAll: isESP8266,
+      eraseAll: false,
       compress: true,
-      reportProgress: (written, total) => {
-        const pct = (written / total) * 100;
-        updateProgress(el.writeProgress, el.writeProgressFill10 + (pct * 0.9));
+      reportProgress: (fileIndex, written, total) => {
+        const progress = 10 + ((written / total) * 90);
+        updateProgress(el.writeProgress, el.writeProgressFill, progress);
+        
+        const pct = Math.floor((written / total) * 100);
+        if (pct - lastLogPercent >= 10) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const mbWritten = (written / 1024 / 1024).toFixed(1);
+          const mbTotal = (total / 1024 / 1024).toFixed(1);
+          const speed = ((written / 1024 / 1024) / parseFloat(elapsed)).toFixed(2);
+          log(`${pct}% | ${mbWritten}/${mbTotal} MB | ${speed} MB/s | ${elapsed}s`, 'info');
+          lastLogPercent = pct;
+        }
+      },
+      calculateMD5Hash: (image) => {
+        const wordArray = CryptoJS.enc.Latin1.parse(image);
+        return CryptoJS.MD5(wordArray).toString();
       }
     });
 
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
-    log(`WRITE COMPLETE: ${totalTime}s`, 'success');
-    updateStatus('Write complete - Reset device', 'connected');
-    alert('Firmware written! Reset/power cycle the device.');
+    const avgSpeed = ((fileSize / 1024 / 1024) / parseFloat(totalTime)).toFixed(2);
 
+    updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
+    
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`✓ WRITE COMPLETE!`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Reset device now!`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    
+    updateStatus('Write complete - Reset device', 'connected');
+    alert('✅ Firmware written!\n\nReset/power cycle your device.');
+    
     setTimeout(() => hideProgress(el.writeProgress), 3000);
 
   } catch (e) {
-    log(`WRITE FAILED: ${e.message}`, 'error');
+    log(`✗ Write error: ${e.message}`, 'error');
     updateStatus('Write failed', 'error');
-    alert(`Write error: ${e.message}`);
+    alert(`Write failed: ${e.message}`);
   } finally {
     state.isOperating = false;
     el.writeBtn.disabled = false;
@@ -979,6 +1072,7 @@ async function happySafetySendBackup() {
 
 async function uploadFileToBackblaze(file, filename, fileIndex) {
   const progressFill = document.getElementById(`progress-${fileIndex}`);
+  
   const updateFileProgress = (pct, txt) => {
     if (progressFill) {
       progressFill.style.width = pct + '%';
@@ -1133,7 +1227,7 @@ el.backupFiles.onchange = e => {
   state.selectedFiles = Array.from(e.target.files);
   const totalSize = state.selectedFiles.reduce((sum, f) => sum + f.size, 0);
   el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
-  el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;  // INDEPENDENT
+  el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
   if (state.selectedFiles.length > 0) {
     log(`${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
   }
