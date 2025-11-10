@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ESP Universal Flash Dumper & Writer</title>
+<title>ESP Universal Flash Dumper & Writer - Enhanced</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -156,6 +156,34 @@ line-height: 1.6;
 .log-entry.success { color: #51cf66; }
 .log-entry.warning { color: #ffd43b; }
 .log-entry.info { color: #74c0fc; }
+.radio-links {
+display: flex;
+justify-content: space-around;
+align-items: center;
+gap: 30px;
+flex-wrap: wrap;
+}
+.radio-link {
+display: flex;
+flex-direction: column;
+align-items: center;
+text-decoration: none;
+transition: transform 0.3s;
+}
+.radio-link:hover { transform: scale(1.1); }
+.radio-link img {
+width: 120px;
+height: 120px;
+border-radius: 15px;
+box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+margin-bottom: 10px;
+border: 4px solid #5B9BD5;
+}
+.radio-link span {
+color: #000;
+font-weight: bold;
+font-size: 1.1em;
+}
 .file-progress-item {
 background: white;
 padding: 10px;
@@ -202,6 +230,10 @@ color: #1a5f3f;
 line-height: 1.8;
 box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 }
+@media (max-width: 768px) {
+.header-images { flex-direction: column; align-items: center; gap: 15px; }
+h1 { font-size: 2em; }
+}
 </style>
 </head>
 <body>
@@ -215,6 +247,11 @@ box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 <div class="warning-message">
 Orice-ai face să te înveleşti!<br>
 Whatever you do, cover yourself!<br>
+Quoi que tu fasses, couvre-toi!<br>
+Was auch immer du tust, bedecke dich!<br>
+Qualunque cosa tu faccia, copriti!<br>
+Faça o que fizer, cubra-se!<br>
+Bármit is teszel, takard be magad!<br>
 !مهما فعلت، غط نفسك
 </div>
 
@@ -229,12 +266,16 @@ Whatever you do, cover yourself!<br>
 <strong>Features:</strong> <span id="chipFeatures">-</span>
 </div>
 <div class="control-group">
-<label>Flash Size Override:</label>
+<label>Flash Size Override (optional):</label>
 <select id="flashSizeSelect">
-<option value="auto">Auto Detect</option>
+<option value="auto">Auto Detect (Recommended)</option>
+<option value="1">1 MB (Force)</option>
+<option value="2">2 MB (Force)</option>
 <option value="4">4 MB (Force)</option>
 <option value="8">8 MB (Force)</option>
 <option value="16">16 MB (Force)</option>
+<option value="32">32 MB (Force)</option>
+<option value="64">64 MB (Force)</option>
 </select>
 </div>
 <div class="button-group">
@@ -247,6 +288,9 @@ Whatever you do, cover yourself!<br>
 
 <div class="section">
 <h2>Happy Read - Dump Flash</h2>
+<p><strong>1.</strong> Connect device via USB</p>
+<p><strong>2.</strong> Click HAPPY READ to dump entire flash (auto-detected size)</p>
+<p><strong>3.</strong> File saved to Downloads</p>
 <div class="button-group">
 <button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
 </div>
@@ -256,9 +300,12 @@ Whatever you do, cover yourself!<br>
 </div>
 
 <div class="section">
-<h2>Happy Safety Send Backup</h2>
+<h2>Happy Safety Send Backup (Multi-File)</h2>
+<p><strong>1.</strong> Choose backup files (multiple allowed)</p>
+<p><strong>2.</strong> Enter password and press Enter</p>
+<p><strong>3.</strong> Enter verification code from SMS</p>
 <div class="control-group">
-<label>Choose Files:</label>
+<label>Choose Backup Files (multiple):</label>
 <input type="file" id="backupFiles" multiple>
 </div>
 <div id="selectedFilesInfo" style="margin-top:10px; color:#1a5f3f; font-weight:bold;"></div>
@@ -270,8 +317,10 @@ Whatever you do, cover yourself!<br>
 
 <div class="section">
 <h2>Happy Write - Write Flash</h2>
+<p><strong>1.</strong> Select firmware file (.bin)</p>
+<p><strong>2.</strong> Click HAPPY WRITE</p>
 <div class="control-group">
-<label>Firmware File:</label>
+<label>Select Firmware File:</label>
 <input type="file" id="writeFile" accept=".bin">
 </div>
 <div class="button-group">
@@ -285,7 +334,21 @@ Whatever you do, cover yourself!<br>
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
-<div class="log-entry info">System ready.</div>
+<div class="log-entry info">Universal ESP System initialized. Supports ESP8266, ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6...</div>
+</div>
+</div>
+
+<div class="section">
+<h2>Radio Live</h2>
+<div class="radio-links">
+<a href="https://www.radioromaniacultural.ro/live/" target="_blank" class="radio-link">
+<img src="./logocultural.svg" alt="Radio România Cultural" onerror="this.style.display='none'">
+<span>Cultural</span>
+</a>
+<a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
+<img src="./logoriasi.svg" alt="Radio Iaşi" onerror="this.style.display='none'">
+<span>Radio Iaşi</span>
+</a>
 </div>
 </div>
 </div>
@@ -293,24 +356,44 @@ Whatever you do, cover yourself!<br>
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// === CONFIG ===
-const WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
+// === CONFIGURATION ===
 const BACKBLAZE = {
   keyId: '005334a4b31a9360000000007',
   applicationKey: 'K005ajOLwAiPaMGV1jqzcmWoCD+7xaE',
-  bucketId: '1303149a14db53119aa90316',
   bucketName: 'githubwdt81',
+  bucketId: '1303149a14db53119aa90316',
   folder: 'Uploads'
 };
+
+const CLOUDFLARE_WORKER_URL = 'https://shrill-sun-b40e.tehnicdti.workers.dev';
 const SAFETY_PASSWORD_HASH = 'e4f3a81dd311d8836b73b9918ec73c2f5070ab22deaacbd37c79c262168bef32';
 const CHUNK_SIZE = 100 * 1024 * 1024;
 
-// === STATE ===
+// Flash size detection codes
+const FLASH_SIZE_MAP = {
+  0x12: 0.25, 0x13: 0.5, 0x14: 1, 0x15: 2,
+  0x16: 4, 0x17: 8, 0x18: 16, 0x19: 32, 0x1A: 64
+};
+
 const state = {
-  port: null, esploader: null, transport: null, chip: null,
-  connected: false, isOperating: false,
-  detectedFlashSize: 4, flashSizeMode: 'auto',
-  selectedFiles: [], smsCode: null, macAddress: 'UNKNOWN'
+  port: null, 
+  esploader: null, 
+  transport: null, 
+  chip: null, 
+  connected: false,
+  isOperating: false, 
+  lastDumpData: null, 
+  lastDumpFilename: null,
+  detectedFlashSize: 4, 
+  detectedFlashBytes: 4*1024*1024, 
+  chipType: '', 
+  chipFamily: '', 
+  macAddress: '', 
+  chipFeatures: '',
+  flashSizeMode: 'auto', 
+  selectedFiles: [], 
+  smsCode: null,
+  logBuffer: []
 };
 
 const el = {
@@ -337,7 +420,6 @@ const el = {
   fileListContainer: document.getElementById('fileListContainer')
 };
 
-// === LOG ===
 function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('ro-RO');
   const entry = document.createElement('div');
@@ -345,191 +427,871 @@ function log(msg, type = 'info') {
   entry.textContent = `[${time}] ${msg}`;
   el.logContainer.appendChild(entry);
   el.logContainer.scrollTop = el.logContainer.scrollHeight;
+  state.logBuffer.push(`[${time}] ${msg}`);
 }
-
-// === DIALOGURI ===
-function showPasswordDialog() {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:10000;';
-    overlay.innerHTML = `
-      <form id="pwdForm" style="background:#B3D9F2;padding:30px;border-radius:15px;border:4px solid #5B9BD5;max-width:400px;width:90%;display:flex;flex-direction:column;gap:15px;">
-        <h3 style="color:#1a5f3f;margin:0;text-align:center;">Enter Password</h3>
-        <input type="password" id="pwdInput" style="padding:12px;font-size:1.1em;border:3px solid #5B9BD5;border-radius:8px;" placeholder="Password">
-        <div style="display:flex;gap:10px;">
-          <button type="submit" style="flex:1;padding:12px;background:#1a5f3f;color:white;border:none;border-radius:8px;font-weight:bold;">OK</button>
-          <button type="button" id="cancelBtn" style="flex:1;padding:12px;background:#6c757d;color:white;border:none;border-radius:8px;font-weight:bold;">Cancel</button>
-        </div>
-      </form>
-    `;
-    document.body.appendChild(overlay);
-    const input = overlay.querySelector('#pwdInput');
-    input.focus();
-    overlay.querySelector('#pwdForm').onsubmit = e => { e.preventDefault(); document.body.removeChild(overlay); resolve(input.value); };
-    overlay.querySelector('#cancelBtn').onclick = () => { document.body.removeChild(overlay); resolve(null); };
-  });
-}
-
-function showPhoneDialog() {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:10000;';
-    overlay.innerHTML = `
-      <form id="phoneForm" style="background:#B3D9F2;padding:30px;border-radius:15px;border:4px solid #5B9BD5;max-width:400px;width:90%;display:flex;flex-direction:column;gap:15px;">
-        <h3 style="color:#1a5f3f;margin:0;text-align:center;">Enter Phone (+40...)</h3>
-        <input type="tel" id="phoneInput" style="padding:12px;font-size:1.1em;border:3px solid #5B9BD5;border-radius:8px;" placeholder="+407xxxxxxxx">
-        <div style="display:flex;gap:10px;">
-          <button type="submit" style="flex:1;padding:12px;background:#1a5f3f;color:white;border:none;border-radius:8px;font-weight:bold;">Send SMS</button>
-          <button type="button" id="cancelBtn" style="flex:1;padding:12px;background:#6c757d;color:white;border:none;border-radius:8px;font-weight:bold;">Cancel</button>
-        </div>
-      </form>
-    `;
-    document.body.appendChild(overlay);
-    const input = overlay.querySelector('#phoneInput');
-    input.focus();
-    overlay.querySelector('#phoneForm').onsubmit = e => { e.preventDefault(); document.body.removeChild(overlay); resolve(input.value.trim()); };
-    overlay.querySelector('#cancelBtn').onclick = () => { document.body.removeChild(overlay); resolve(null); };
-  });
-}
-
-function showCodeDialog() {
-  return new Promise(resolve => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:10000;';
-    overlay.innerHTML = `
-      <form id="codeForm" style="background:#B3D9F2;padding:30px;border-radius:15px;border:4px solid #5B9BD5;max-width:400px;width:90%;display:flex;flex-direction:column;gap:15px;">
-        <h3 style="color:#1a5f3f;margin:0;text-align:center;">Enter 6-digit Code</h3>
-        <input type="text" id="codeInput" maxlength="6" style="padding:12px;font-size:1.1em;border:3px solid #5B9BD5;border-radius:8px;text-align:center;letter-spacing:8px;font-weight:bold;" placeholder="------">
-        <div style="display:flex;gap:10px;">
-          <button type="submit" style="flex:1;padding:12px;background:#1a5f3f;color:white;border:none;border-radius:8px;font-weight:bold;">Verify</button>
-          <button type="button" id="cancelBtn" style="flex:1;padding:12px;background:#6c757d;color:white;border:none;border-radius:8px;font-weight:bold;">Cancel</button>
-        </div>
-      </form>
-    `;
-    document.body.appendChild(overlay);
-    const input = overlay.querySelector('#codeInput');
-    input.focus();
-    overlay.querySelector('#codeForm').onsubmit = e => { e.preventDefault(); document.body.removeChild(overlay); resolve(input.value.trim()); };
-    overlay.querySelector('#cancelBtn').onclick = () => { document.body.removeChild(overlay); resolve(null); };
-  });
-}
-
-// === SMS ===
-async function sendSMS(to, code) {
-  log(`Sending SMS to ${to}...`, 'info');
-  const resp = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'sendSMS',
-      to, code,
-      keyId: BACKBLAZE.keyId,
-      applicationKey: BACKBLAZE.applicationKey
-    })
-  });
-  if (!resp.ok) throw new Error(`SMS failed: ${await resp.text()}`);
-  log('SMS sent!', 'success');
-}
-
-async function verifySMS() {
-  const phone = await showPhoneDialog();
-  if (!phone) throw new Error('Cancelled');
-  if (!/^\+?\d{10,15}$/.test(phone)) throw new Error('Invalid phone');
-
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  state.smsCode = code;
-  await sendSMS(phone, code);
-
-  const userCode = await showCodeDialog();
-  if (!userCode) throw new Error('Cancelled');
-  if (userCode !== code) throw new Error('Wrong code!');
-  log('SMS verified!', 'success');
-}
-
-// === CONNECT ===
-async function connect() {
-  try {
-    state.port = await navigator.serial.requestPort();
-    state.transport = new Transport(state.port);
-    state.esploader = new ESPLoader({ transport: state.transport, baudrate: 921600 });
-    log('Connecting...', 'info');
-    state.chip = await state.esploader.main();
-    state.connected = true;
-
-    const info = await state.esploader.chipInfo();
-    state.macAddress = info.mac;
-    state.detectedFlashSize = 4; // Simplified
-
-    el.chipType.textContent = info.chip;
-    el.macAddress.textContent = state.macAddress;
-    el.flashSize.textContent = `${state.detectedFlashSize} MB`;
-    el.deviceInfo.style.display = 'block';
-
-    updateStatus('Connected!', 'connected');
-    el.connectBtn.disabled = true;
-    el.disconnectBtn.disabled = false;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = false;
-    log('Connected!', 'success');
-  } catch (e) {
-    log(`Error: ${e.message}`, 'error');
-  }
-}
-
-function disconnect() {
-  if (state.connected) {
-    state.transport?.disconnect();
-    state.port?.close();
-    state.connected = false;
-    updateStatus('Disconnected');
-    el.connectBtn.disabled = false;
-    el.disconnectBtn.disabled = true;
-    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
-  }
-}
-
-// === DUMP ===
-async function dumpFlash() {
-  if (!state.connected) return;
-  const size = 4 * 1024 * 1024;
-  const data = await state.esploader.readFlash(0, size);
-  const blob = new Blob([data], { type: 'application/octet-stream' });
-  const filename = `dump_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}.bin`;
-  saveAs(blob, filename);
-  log('Dump saved!', 'success');
-}
-
-// === SAFETY BACKUP ===
-async function safetyBackup() {
-  if (state.selectedFiles.length === 0) return alert('Select files!');
-  const pwd = await showPasswordDialog();
-  if (!pwd || CryptoJS.SHA256(pwd).toString() !== SAFETY_PASSWORD_HASH) return alert('Wrong password!');
-
-  try {
-    await verifySMS();
-    // Upload logic here (simplified for now)
-    alert('Backup would start now...');
-  } catch (e) {
-    alert(e.message);
-  }
-}
-
-// === EVENTS ===
-el.connectBtn.onclick = connect;
-el.disconnectBtn.onclick = disconnect;
-el.dumpBtn.onclick = dumpFlash;
-el.safetyBackupBtn.onclick = safetyBackup;
-el.backupFiles.onchange = () => {
-  state.selectedFiles = Array.from(el.backupFiles.files);
-  el.selectedFilesInfo.textContent = `${state.selectedFiles.length} files selected`;
-  el.safetyBackupBtn.disabled = !state.connected || state.selectedFiles.length === 0;
-};
 
 function updateStatus(msg, type = '') {
   el.status.textContent = msg;
   el.status.className = `status ${type}`;
 }
 
-log('Ready. Click CONNECT.', 'info');
+function updateProgress(bar, fill, pct, txt) {
+  bar.classList.add('active');
+  fill.style.width = pct + '%';
+  fill.textContent = txt || Math.round(pct) + '%';
+}
+
+function hideProgress(bar) { bar.classList.remove('active'); }
+
+function verifyPassword(input) {
+  const hash = CryptoJS.SHA256(input).toString();
+  return hash === SAFETY_PASSWORD_HASH;
+}
+
+function getEffectiveFlashSize() {
+  if (state.flashSizeMode === 'auto') {
+    return state.detectedFlashSize;
+  }
+  return parseInt(state.flashSizeMode, 10);
+}
+
+function getEffectiveFlashBytes() {
+  return getEffectiveFlashSize() * 1024 * 1024;
+}
+
+function updateFlashSizeDisplay() {
+  const size = getEffectiveFlashSize();
+  const mode = state.flashSizeMode === 'auto' 
+    ? `(auto-detected: ${state.detectedFlashSize} MB)` 
+    : '(manual override)';
+  el.flashSize.textContent = `${size} MB ${mode}`;
+}
+
+function parseChipInfoFromLogs(logs) {
+  const info = {
+    chipType: 'Unknown',
+    chipFamily: 'ESP',
+    features: '',
+    macAddress: '',
+    flashSize: null
+  };
+  
+  const chipMatch = logs.match(/Chip is (ESP[\w\d-]+)\s*(?:\(revision\s*(\d+)\))?/i);
+  if (chipMatch) {
+    info.chipType = chipMatch[1];
+    if (chipMatch[2]) info.chipType += ` (rev ${chipMatch[2]})`;
+  }
+  
+  if (info.chipType.includes('ESP8266')) {
+    info.chipFamily = 'ESP8266';
+  } else if (info.chipType.includes('S2')) {
+    info.chipFamily = 'ESP32-S2';
+  } else if (info.chipType.includes('S3')) {
+    info.chipFamily = 'ESP32-S3';
+  } else if (info.chipType.includes('C3')) {
+    info.chipFamily = 'ESP32-C3';
+  } else if (info.chipType.includes('C2')) {
+    info.chipFamily = 'ESP32-C2';
+  } else if (info.chipType.includes('C6')) {
+    info.chipFamily = 'ESP32-C6';
+  } else if (info.chipType.includes('H2')) {
+    info.chipFamily = 'ESP32-H2';
+  } else if (info.chipType.includes('ESP32')) {
+    info.chipFamily = 'ESP32';
+  }
+  
+  const featuresMatch = logs.match(/Features:\s*([^\n]+)/i);
+  if (featuresMatch) {
+    info.features = featuresMatch[1].trim();
+  }
+  
+  const macMatch = logs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
+  if (macMatch) {
+    info.macAddress = macMatch[1].toUpperCase();
+  }
+  
+  const crystalMatch = logs.match(/Crystal is (\d+)MHz/i);
+  if (crystalMatch) {
+    info.features = (info.features ? info.features + ', ' : '') + `Crystal: ${crystalMatch[1]}MHz`;
+  }
+  
+  const flashSizeMatch = logs.match(/Detected flash size:\s*(\d+)MB/i);
+  if (flashSizeMatch) {
+    info.flashSize = parseInt(flashSizeMatch[1], 10);
+  }
+  
+  return info;
+}
+
+async function detectFlashSize() {
+  try {
+    log('Detecting flash size...', 'info');
+    const flashId = await state.esploader.flashId();
+    log(`Manufacturer: ${(flashId & 0xFF).toString(16)}`, 'info');
+    log(`Device: ${((flashId >> 8) & 0xFFFF).toString(16)}`, 'info');
+    
+    const sizeCode = (flashId >> 16) & 0xFF;
+    
+    if (FLASH_SIZE_MAP[sizeCode]) {
+      const sizeMB = FLASH_SIZE_MAP[sizeCode];
+      log(`Detected flash size: ${sizeMB}MB`, 'success');
+      return sizeMB;
+    } else {
+      log(`Unknown flash size code: 0x${sizeCode.toString(16)}, defaulting to 4MB`, 'warning');
+      return 4;
+    }
+  } catch (e) {
+    log(`Flash detection error: ${e.message}, defaulting to 4MB`, 'warning');
+    return 4;
+  }
+}
+
+async function readMacAddress() {
+  try {
+    const allLogs = state.logBuffer.join('\n');
+    const macMatch = allLogs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
+    if (macMatch) {
+      const mac = macMatch[1].toUpperCase();
+      log(`MAC from connection log: ${mac}`, 'success');
+      return mac;
+    }
+    
+    if (state.chip && state.chip.MAC_ADDR) {
+      const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
+      log(`MAC from chip: ${mac}`, 'success');
+      return mac;
+    }
+    
+    log(`Could not determine MAC address`, 'warning');
+    return 'Unknown';
+  } catch (e) {
+    log(`MAC detection error: ${e.message}`, 'error');
+    return 'Unknown';
+  }
+}
+
+async function sendTwilioSMS(code) {
+  const toPhone = prompt('Introdu telefonul tău pentru SMS (+40...):')?.trim();
+  if (!toPhone) throw new Error('Telefon anulat');
+
+  log(`Se trimite SMS la ${toPhone}...`, 'info');
+
+  const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'sendSMS',
+      to: toPhone,
+      code: code
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(err);
+  }
+
+  return await resp.json();
+}
+
+async function triggerTwilioSMS() {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  state.smsCode = code;
+  log('Sending SMS via Twilio...', 'info');
+  try {
+    await sendTwilioSMS(code);
+    log('SMS sent successfully!', 'success');
+    const userCode = prompt('Enter the 6-digit code from SMS:');
+    if (userCode === code) {
+      log('Code verified!', 'success');
+      return true;
+    } else {
+      log('Invalid code!', 'error');
+      alert('Invalid verification code!');
+      return false;
+    }
+  } catch (error) {
+    log(`SMS error: ${error.message}`, 'error');
+    throw error;
+  }
+}
+
+async function connect() {
+  try {
+    if (!('serial' in navigator)) {
+      throw new Error('Web Serial API not supported! Use Chrome/Edge.');
+    }
+    
+    updateStatus('Requesting port...', 'working');
+    log('Requesting serial port...', 'info');
+
+    state.port = await navigator.serial.requestPort();
+    state.transport = new Transport(state.port, true);
+
+    const term = { 
+      writeLine: (text) => { 
+        if (!text.includes('Read') && !text.includes('write 0x') && !text.includes('Writing') && !text.includes('Wrote')) {
+          log(text); 
+          state.logBuffer.push(text);
+        }
+      }, 
+      write: (text) => { 
+        if (!text.includes('Read') && !text.includes('write 0x') && !text.includes('Writing') && !text.includes('Wrote')) {
+          log(text); 
+          state.logBuffer.push(text);
+        }
+      }, 
+      clean: () => {} 
+    };
+    
+    state.esploader = new ESPLoader({ 
+      transport: state.transport, 
+      baudrate: 921600,
+      romBaudrate: 115200, 
+      terminal: term,
+      enableTracing: false
+    });
+
+    log('Connecting to chip...', 'info');
+    updateStatus('Detecting chip type...', 'working');
+    
+    state.chip = await state.esploader.main();
+    state.connected = true;
+    
+    const allLogs = state.logBuffer.join('\n');
+    const chipInfo = parseChipInfoFromLogs(allLogs);
+    
+    state.chipType = chipInfo.chipType || state.chip?.CHIP_NAME || 'ESP32';
+    state.chipFamily = chipInfo.chipFamily;
+    state.chipFeatures = chipInfo.features;
+    
+    log(`Detected: ${state.chipType} (${state.chipFamily})`, 'success');
+    
+    const detectedSize = await detectFlashSize();
+    
+    const updatedLogs = state.logBuffer.join('\n');
+    const flashMatch = updatedLogs.match(/Detected flash size:\s*(\d+)MB/i);
+    
+    if (flashMatch) {
+      state.detectedFlashSize = parseInt(flashMatch[1], 10);
+      log(`Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
+    } else {
+      state.detectedFlashSize = detectedSize;
+      log(`Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
+    }
+    
+    state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
+    
+    if (chipInfo.macAddress) {
+      state.macAddress = chipInfo.macAddress;
+      log(`Using MAC from connection: ${state.macAddress}`, 'success');
+    } else {
+      state.macAddress = await readMacAddress();
+    }
+
+    el.chipType.textContent = state.chipType;
+    el.macAddress.textContent = state.macAddress;
+    el.chipFeatures.textContent = state.chipFeatures || 'N/A';
+    updateFlashSizeDisplay();
+    el.deviceInfo.style.display = 'block';
+
+    updateStatus(`Connected: ${state.chipType} - ${getEffectiveFlashSize()}MB`, 'connected');
+    el.connectBtn.disabled = true; 
+    el.disconnectBtn.disabled = false;
+    el.dumpBtn.disabled = el.writeBtn.disabled = false;
+    el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
+
+    log(`CONNECTION SUCCESSFUL!`, 'success');
+    log(`→ Chip Family: ${state.chipFamily}`, 'success');
+  } catch (e) {
+    log(`Connection failed: ${e.message}`, 'error');
+    updateStatus('Connection failed', 'error');
+  }
+}
+
+async function disconnect() {
+  if (state.connected) {
+    try {
+      if (state.esploader) await state.esploader.disconnect();
+      if (state.transport) await state.transport.disconnect();
+      if (state.port) await state.port.close();
+    } catch (e) {
+      log(`Disconnect error: ${e.message}`, 'warning');
+    }
+    state.connected = false;
+    state.chip = null;
+    state.esploader = null;
+    state.transport = null;
+    state.port = null;
+    el.deviceInfo.style.display = 'none';
+    updateStatus('Disconnected');
+    el.connectBtn.disabled = false;
+    el.disconnectBtn.disabled = true;
+    el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
+    log('Disconnected', 'info');
+  }
+}
+
+async function happyRead() {
+  if (!state.connected || state.isOperating) return;
+  
+  state.isOperating = true;
+  el.dumpBtn.disabled = true;
+  updateStatus('Reading flash...', 'working');
+
+  const size = getEffectiveFlashBytes();
+  const sizeMB = getEffectiveFlashSize();
+  
+  log(`Starting flash dump`, 'info');
+  log(`Size: ${sizeMB} MB`, 'info');
+  log(`Mode: ${state.flashSizeMode === 'auto' ? 'Auto' : 'Manual override'}`, 'info');
+  
+  try {
+    const data = new Uint8Array(size);
+    
+    let chunk;
+    if (sizeMB >= 16) {
+      chunk = 0x4000;
+      log('Using optimized 16KB chunks for 16MB flash', 'info');
+    } else if (sizeMB >= 8) {
+      chunk = 0x4000;
+      log('Using optimized 16KB chunks for 8MB flash', 'info');
+    } else if (state.chipFamily === 'ESP8266') {
+      chunk = 0x1000;
+      log('Using ESP8266 optimized 4KB chunks', 'info');
+    } else {
+      chunk = 0x4000;
+      log('Using standard 16KB chunks', 'info');
+    }
+
+    const startTime = Date.now();
+    let lastLogPercent = -5;
+    const MAX_RETRIES = 3;
+    let consecutiveErrors = 0;
+    
+    for (let offset = 0; offset < size; offset += chunk) {
+      const blockSize = Math.min(chunk, size - offset);
+      let success = false;
+      let attempts = 0;
+      
+      while (!success && attempts < MAX_RETRIES) {
+        try {
+          const block = await state.esploader.readFlash(offset, blockSize);
+          data.set(new Uint8Array(block), offset);
+          success = true;
+          consecutiveErrors = 0;
+        } catch (e) {
+          attempts++;
+          consecutiveErrors++;
+          
+          if (consecutiveErrors >= 10) {
+            throw new Error(`Too many errors. Last: ${e.message}`);
+          }
+          
+          if (attempts < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 100 * attempts));
+          } else {
+            throw new Error(`Failed at 0x${offset.toString(16)} after ${MAX_RETRIES} attempts: ${e.message}`);
+          }
+        }
+      }
+      
+      const progress = ((offset + blockSize) / size) * 100;
+      updateProgress(el.dumpProgress, el.dumpProgressFill, progress);
+      
+      const currentPercent = Math.floor(progress);
+      if (currentPercent - lastLogPercent >= 5) {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const mbRead = (offset + blockSize) / (1024 * 1024);
+        const speed = mbRead / elapsedSec;
+        const remaining = (size - offset - blockSize) / (1024 * 1024);
+        const etaSec = Math.ceil(remaining / speed);
+        const etaMin = Math.floor(etaSec / 60);
+        const etaSecRem = etaSec % 60;
+        
+        log(`${currentPercent}% | ${mbRead.toFixed(1)}/${sizeMB} MB | ${speed.toFixed(2)} MB/s | ETA: ${etaMin}:${etaSecRem.toString().padStart(2,'0')}`, 'info');
+        lastLogPercent = currentPercent;
+      }
+      
+      if (offset % (256 * 1024) === 0) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    const avgSpeed = (sizeMB / parseFloat(totalTime)).toFixed(2);
+    const filename = `${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${sizeMB}MB_${new Date().toISOString().slice(0,10)}.bin`;
+    
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    saveAs(blob, filename);
+    
+    state.lastDumpData = data; 
+    state.lastDumpFilename = filename;
+
+    updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
+    setTimeout(() => hideProgress(el.dumpProgress), 2000);
+    
+    log(`DUMP COMPLETE!`, 'success');
+    log(`→ File: ${filename}`, 'success');
+    log(`→ Size: ${sizeMB} MB`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Saved to Downloads`, 'success');
+    
+    updateStatus(`Read complete: ${filename}`, 'connected');
+  } catch (e) { 
+    log(`Read error: ${e.message}`, 'error');
+    updateStatus('Read failed', 'error');
+    alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting.`);
+  } finally { 
+    state.isOperating = false; 
+    el.dumpBtn.disabled = false; 
+  }
+}
+
+async function happyWrite() {
+  if (!state.connected || state.isOperating) return;
+  
+  const file = el.writeFile.files[0];
+  if (!file) {
+    alert('Please select a firmware file first!');
+    return;
+  }
+
+  const fileSize = file.size;
+  const flashSize = getEffectiveFlashBytes();
+  
+  const minSize = flashSize * 0.75;
+  const maxSize = flashSize * 1.25;
+  
+  if (fileSize < minSize || fileSize > maxSize) {
+    const proceed = confirm(
+      `WARNING: Size Mismatch\n\n` +
+      `File size: ${(fileSize/1024/1024).toFixed(2)} MB\n` +
+      `Flash size: ${getEffectiveFlashSize()} MB\n\n` +
+      `This firmware may be incompatible with ${state.chipFamily}.\n\n` +
+      `Continue anyway?`
+    );
+    if (!proceed) {
+      log('Write cancelled - size mismatch', 'warning');
+      return;
+    }
+  }
+
+  try {
+    state.isOperating = true;
+    el.writeBtn.disabled = true;
+    updateStatus('Reading firmware...', 'working');
+    
+    log(`Starting firmware write to ${state.chipFamily}`, 'info');
+    log(`Firmware: ${file.name}`, 'info');
+    log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
+
+    const arrayBuffer = await file.arrayBuffer();
+    
+    const confirmWrite = window.confirm(
+      `FINAL WARNING\n\n` +
+      `This will ERASE and WRITE the entire flash!\n\n` +
+      `Chip: ${state.chipType}\n` +
+      `Firmware: ${file.name}\n` +
+      `Size: ${(fileSize/1024/1024).toFixed(2)} MB\n\n` +
+      `Continue?`
+    );
+
+    if (!confirmWrite) {
+      log('Write cancelled by user', 'warning');
+      return;
+    }
+
+    if (state.chipFamily === 'ESP8266') {
+      log('ESP8266 DETECTED - Applying special write sequence...', 'warning');
+      log('→ Entering bootloader mode for ESP8266...', 'info');
+      
+      try {
+        await state.transport.setDTR(false);
+        await state.transport.setRTS(true);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        await state.transport.setDTR(true);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        await state.transport.setRTS(false);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        log('ESP8266 bootloader mode activated', 'success');
+      } catch (e) {
+        log(`Auto-boot failed: ${e.message}`, 'warning');
+        log('→ Manual mode: Hold BOOT button and press RESET, then click OK', 'warning');
+        
+        const manualOk = confirm(
+          'ESP8266 Manual Boot Required\n\n' +
+          '1. Hold BOOT/FLASH/GPIO0 button\n' +
+          '2. Press and release RESET/EN button\n' +
+          '3. Release BOOT button\n' +
+          '4. Click OK to continue\n\n' +
+          'Device LED should be ON/dimmed if in bootloader mode.'
+        );
+        
+        if (!manualOk) {
+          log('Write cancelled - manual boot not confirmed', 'warning');
+          return;
+        }
+      }
+      
+      try {
+        await state.esploader.sync();
+        log('ESP8266 bootloader communication confirmed', 'success');
+      } catch (e) {
+        log('Bootloader sync failed - device may not be in boot mode', 'error');
+        throw new Error('ESP8266 not in bootloader mode. Try manual boot sequence again.');
+      }
+    }
+
+    updateStatus('Erasing flash...', 'working');
+    log('Erasing flash (10-30 seconds)...', 'warning');
+    updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
+
+    if (state.chipFamily !== 'ESP8266') {
+      await state.esploader.eraseFlash();
+      log('Flash erased!', 'success');
+    } else {
+      log('ESP8266 - Erase will be done during write', 'info');
+    }
+
+    updateStatus('Writing firmware...', 'working');
+    log('Writing firmware...', 'info');
+    updateProgress(el.writeProgress, el.writeProgressFill, 10, 'Writing...');
+
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binaryString = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binaryString += String.fromCharCode(uint8Array[i]);
+    }
+
+    const fileArray = [{
+      data: binaryString,
+      address: 0x0
+    }];
+
+    let lastLogPercent = 0;
+    const startTime = Date.now();
+
+    await state.esploader.writeFlash({
+      fileArray: fileArray,
+      flashSize: 'keep',
+      flashMode: 'keep',
+      flashFreq: 'keep',
+      eraseAll: state.chipFamily === 'ESP8266',
+      compress: true,
+      reportProgress: (fileIndex, written, total) => {
+        const progress = 10 + ((written / total) * 90);
+        updateProgress(el.writeProgress, el.writeProgressFill, progress);
+        
+        const pct = Math.floor((written / total) * 100);
+        if (pct - lastLogPercent >= 10) {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          const mbWritten = (written / 1024 / 1024).toFixed(1);
+          const mbTotal = (total / 1024 / 1024).toFixed(1);
+          const speed = ((written / 1024 / 1024) / parseFloat(elapsed)).toFixed(2);
+          log(`${pct}% | ${mbWritten}/${mbTotal} MB | ${speed} MB/s | ${elapsed}s`, 'info');
+          lastLogPercent = pct;
+        }
+      },
+      calculateMD5Hash: (image) => {
+        const wordArray = CryptoJS.enc.Latin1.parse(image);
+        return CryptoJS.MD5(wordArray).toString();
+      }
+    });
+
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    const avgSpeed = ((fileSize / 1024 / 1024) / parseFloat(totalTime)).toFixed(2);
+
+    updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
+    
+    log(`WRITE COMPLETE!`, 'success');
+    log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
+    log(`→ Reset device now!`, 'success');
+    
+    updateStatus('Write complete - Reset device', 'connected');
+    alert('Firmware written!\n\nReset/power cycle your device.');
+    
+    setTimeout(() => hideProgress(el.writeProgress), 3000);
+
+  } catch (e) {
+    log(`Write error: ${e.message}`, 'error');
+    updateStatus('Write failed', 'error');
+    alert(`Write failed: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    el.writeBtn.disabled = false;
+  }
+}
+
+async function happySafetySendBackup() {
+  if (state.selectedFiles.length === 0) {
+    alert('Please select at least one file!');
+    return;
+  }
+  
+  const pwd = await showPasswordDialog();
+  if (!pwd) { 
+    log('Password entry cancelled', 'warning'); 
+    return; 
+  }
+  
+  if (!verifyPassword(pwd)) { 
+    log('Wrong password!', 'error'); 
+    alert('Wrong password!');
+    return;
+  }
+
+  try {
+    state.isOperating = true;
+    el.safetyBackupBtn.disabled = true;
+    updateStatus('Verifying via SMS...', 'working');
+    
+    log(`Starting secure backup upload`, 'info');
+    log(`Files: ${state.selectedFiles.length}`, 'info');
+    
+    const verified = await triggerTwilioSMS();
+    if (!verified) throw new Error('SMS verification failed');
+
+    log(`Uploading ${state.selectedFiles.length} file(s) to secure cloud...`, 'info');
+    
+    el.fileListContainer.innerHTML = '';
+    
+    const results = [];
+    for (let i = 0; i < state.selectedFiles.length; i++) {
+      const file = state.selectedFiles[i];
+      const fileExt = file.name.substring(file.name.lastIndexOf('.'));
+      const uploadFileName = `${BACKBLAZE.folder}/${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
+      
+      const progressDiv = document.createElement('div');
+      progressDiv.className = 'file-progress-item';
+      progressDiv.innerHTML = `
+        <div class="file-name">${file.name} (${(file.size/1024/1024).toFixed(2)} MB)</div>
+        <div class="mini-progress">
+          <div class="mini-progress-fill" id="progress-${i}">0%</div>
+        </div>
+      `;
+      el.fileListContainer.appendChild(progressDiv);
+      
+      try {
+        log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
+        const url = await uploadFileToBackblaze(file, uploadFileName, i);
+        results.push({ name: file.name, url, success: true });
+        log(`${file.name} uploaded successfully!`, 'success');
+      } catch (e) {
+        results.push({ name: file.name, error: e.message, success: false });
+        log(`${file.name} failed: ${e.message}`, 'error');
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    
+    log(`BACKUP COMPLETE!`, 'success');
+    log(`→ Success: ${successCount}/${results.length} files`, 'success');
+    
+    alert(
+      `Backup Upload Complete!\n\n` +
+      `Success: ${successCount}/${results.length} files\n\n` +
+      `Files are stored securely in cloud storage.`
+    );
+    
+    updateStatus('Backup complete!', 'connected');
+    
+  } catch (e) {
+    log(`Backup error: ${e.message}`, 'error');
+    updateStatus('Backup failed!', 'error');
+    alert(`Backup error: ${e.message}`);
+  } finally {
+    state.isOperating = false;
+    el.safetyBackupBtn.disabled = false;
+  }
+}
+
+async function uploadFileToBackblaze(file, filename, fileIndex) {
+  const progressFill = document.getElementById(`progress-${fileIndex}`);
+  
+  const updateFileProgress = (pct, txt) => {
+    if (progressFill) {
+      progressFill.style.width = pct + '%';
+      progressFill.textContent = txt || pct.toFixed(0) + '%';
+    }
+  };
+
+  const arrayBuffer = await file.arrayBuffer();
+  const sha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(arrayBuffer))).toString();
+  
+  if (file.size < CHUNK_SIZE) {
+    log(`  → Small file mode (< 100MB)`, 'info');
+    
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    updateFileProgress(50, 'Uploading...');
+    
+    const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'uploadSmallFile',
+        fileBase64: base64,
+        fileName: filename,
+        sha1: sha1,
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+
+    if (!resp.ok) throw new Error(await resp.text());
+    
+    const { fileUrl } = await resp.json();
+    updateFileProgress(100, 'Done!');
+    return fileUrl;
+  } else {
+    log(`  → Large file mode (chunked upload)`, 'info');
+    
+    const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'startLargeFile',
+        fileName: filename,
+        contentType: file.type || 'application/octet-stream',
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+    
+    if (!startResp.ok) throw new Error(await startResp.text());
+    const { fileId } = await startResp.json();
+    
+    const parts = [];
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    for (let partNum = 1; partNum <= totalChunks; partNum++) {
+      const start = (partNum - 1) * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = arrayBuffer.slice(start, end);
+      const chunkSha1 = CryptoJS.SHA1(CryptoJS.lib.WordArray.create(new Uint8Array(chunk))).toString();
+      
+      const chunkBase64 = btoa(
+        new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+      
+      const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'uploadPart',
+          fileId: fileId,
+          partNumber: partNum,
+          partBase64: chunkBase64,
+          sha1: chunkSha1,
+          keyId: BACKBLAZE.keyId,
+          applicationKey: BACKBLAZE.applicationKey,
+          bucketId: BACKBLAZE.bucketId
+        })
+      });
+      
+      if (!partResp.ok) throw new Error(await partResp.text());
+      const { partSha1 } = await partResp.json();
+      parts.push(partSha1);
+      
+      const progress = (partNum / totalChunks) * 100;
+      updateFileProgress(progress, `Part ${partNum}/${totalChunks}`);
+      log(`  → Part ${partNum}/${totalChunks} uploaded`, 'info');
+    }
+    
+    const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'finishLargeFile',
+        fileId: fileId,
+        partSha1Array: parts,
+        keyId: BACKBLAZE.keyId,
+        applicationKey: BACKBLAZE.applicationKey,
+        bucketId: BACKBLAZE.bucketId
+      })
+    });
+    
+    if (!partResp.ok) throw new Error(await finishResp.text());
+    const { fileUrl } = await finishResp.json();
+    
+    updateFileProgress(100, 'Complete!');
+    return fileUrl;
+  }
+}
+
+function showPasswordDialog() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;justify-content:center;align-items:center;z-index:10000;`;
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `background:#B3D9F2;padding:30px;border-radius:15px;border:4px solid #5B9BD5;box-shadow:0 10px 40px rgba(0,0,0,0.5);max-width:400px;width:90%;`;
+    dialog.innerHTML = `
+      <h3 style="color:#1a5f3f;margin-bottom:20px;text-align:center;">Enter Password</h3>
+      <input type="password" id="pwdInput" style="width:100%;padding:12px;font-size:1.1em;border:3px solid #5B9BD5;border-radius:8px;margin-bottom:15px;" placeholder="Password">
+      <div style="display:flex;gap:10px;">
+        <button id="pwdOk" style="flex:1;padding:12px;font-size:1em;font-weight:bold;background:#1a5f3f;color:white;border:none;border-radius:8px;cursor:pointer;">OK</button>
+        <button id="pwdCancel" style="flex:1;padding:12px;font-size:1em;font-weight:bold;background:#6c757d;color:white;border:none;border-radius:8px;cursor:pointer;">Cancel</button>
+      </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    const input = document.getElementById('pwdInput');
+    const okBtn = document.getElementById('pwdOk');
+    const cancelBtn = document.getElementById('pwdCancel');
+    input.focus();
+    
+    const cleanup = () => document.body.removeChild(overlay);
+    okBtn.onclick = () => { cleanup(); resolve(input.value); };
+    cancelBtn.onclick = () => { cleanup(); resolve(null); };
+    input.onkeypress = (e) => { if (e.key === 'Enter') { cleanup(); resolve(input.value); } };
+  });
+}
+
+el.connectBtn.onclick = connect;
+el.disconnectBtn.onclick = disconnect;
+el.dumpBtn.onclick = happyRead;
+el.writeBtn.onclick = happyWrite;
+el.safetyBackupBtn.onclick = happySafetySendBackup;
+
+el.backupFiles.onchange = e => {
+  state.selectedFiles = Array.from(e.target.files);
+  const totalSize = state.selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
+  el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
+  if (state.selectedFiles.length > 0) {
+    log(`${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
+  }
+};
+
+el.writeFile.onchange = e => {
+  if (e.target.files[0]) {
+    log(`Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
+  }
+};
+
+el.flashSizeSelect.onchange = e => {
+  state.flashSizeMode = e.target.value;
+  if (state.connected) {
+    updateFlashSizeDisplay();
+    const newSize = getEffectiveFlashSize();
+    log(`Flash size override: ${e.target.value === 'auto' ? 'Auto-detect' : newSize + ' MB (manual)'}`, 'warning');
+  }
+};
+
+log('Universal ESP Flash Tool Ready!', 'success');
+log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
+log('Optimized for 16MB flash with 921600 baud', 'info');
+log('Ready to connect device...', 'info');
+
 </script>
 </body>
 </html>
