@@ -1234,10 +1234,16 @@ el.flashSizeSelect.onchange = e => {
 
 el.safetyBackupBtn.disabled = true;
 
-logContainer.innerHTML = '';
-log('Universal ESP Flash Tool Ready!', 'success');
-log('Optimized for learning with patience and passion - WDT81 2025', 'info');
-log('<span style="font-size: 4em;">🧠</span><span style="font-size: 3em;">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;">💪💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;">📚</span><span style="font-size: 4em;">🧠</span> Spor!', 'success');
+// Add timestamps to initial messages that are already in HTML
+setTimeout(() => {
+  const initTime = new Date().toLocaleTimeString('ro-RO');
+  const time1 = document.getElementById('initialTime1');
+  const time2 = document.getElementById('initialTime2');
+  const time3 = document.getElementById('initialTime3');
+  if (time1) time1.textContent = `[${initTime}]`;
+  if (time2) time2.textContent = `[${initTime}]`;
+  if (time3) time3.textContent = `[${initTime}]`;
+}, 0);
 </script>
 </body>
 </html>
