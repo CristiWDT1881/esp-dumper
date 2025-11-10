@@ -335,7 +335,9 @@ Bármit is teszel, takard be magad!<br>
 <div class="section">
 <h2>Operation Log</h2>
 <div id="logContainer" class="log-container">
-<div class="log-entry info">Universal ESP System initialized. Supports ESP8266, ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6...</div>
+<div class="log-entry success"><span id="initialTime1"></span> Universal ESP Flash Tool Ready!</div>
+<div class="log-entry info"><span id="initialTime2"></span> Optimized for learning with patience and passion - WDT81 2025</div>
+<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em;">🧠</span><span style="font-size: 3em;">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;">💪💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;">📚</span><span style="font-size: 4em;">🧠</span> Spor!</div>
 </div>
 </div>
 
@@ -419,7 +421,7 @@ function log(msg, type = 'info') {
   const time = new Date().toLocaleTimeString('ro-RO');
   const entry = document.createElement('div');
   entry.className = `log-entry ${type}`;
-  entry.textContent = `[${time}] ${msg}`;
+  entry.innerHTML = `[${time}] ${msg}`;
   el.logContainer.appendChild(entry);
   el.logContainer.scrollTop = el.logContainer.scrollHeight;
   state.logBuffer.push(`[${time}] ${msg}`);
@@ -1085,7 +1087,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
     
     updateFileProgress(50, 'Uploading...');
     
-    // ✅ MODIFICAT - nu mai trimitem credențiale
     const resp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1105,7 +1106,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
   } else {
     log(`  → Large file mode (chunked upload)`, 'info');
     
-    // ✅ MODIFICAT - nu mai trimitem credențiale
     const startResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1132,7 +1132,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
         new Uint8Array(chunk).reduce((data, byte) => data + String.fromCharCode(byte), '')
       );
       
-      // ✅ MODIFICAT - nu mai trimitem credențiale
       const partResp = await fetch(CLOUDFLARE_WORKER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1154,7 +1153,6 @@ async function uploadFileToBackblaze(file, filename, fileIndex) {
       log(`  → Part ${partNum}/${totalChunks} uploaded`, 'info');
     }
     
-    // ✅ MODIFICAT - nu mai trimitem credențiale, DAR trimitem fileName
     const finishResp = await fetch(CLOUDFLARE_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1236,14 +1234,10 @@ el.flashSizeSelect.onchange = e => {
 
 el.safetyBackupBtn.disabled = true;
 
-// Clear initial log and show clean startup message
 logContainer.innerHTML = '';
 log('Universal ESP Flash Tool Ready!', 'success');
 log('Optimized for learning with patience and passion - WDT81 2025', 'info');
 log('<span style="font-size: 4em;">🧠</span><span style="font-size: 3em;">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;">💪💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;">📚</span><span style="font-size: 4em;">🧠</span> Spor!', 'success');
-</script>
-</body>
-</html>
 </script>
 </body>
 </html>
