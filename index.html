@@ -615,7 +615,6 @@ async function triggerTwilioSMS() {
   }
 }
 
-// === CONNECT – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function connect() {
   try {
     if (!('serial' in navigator)) {
@@ -723,21 +722,19 @@ async function disconnect() {
     el.connectBtn.disabled = false; 
     el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = true;
-    log('Disconnected from device', '
-    info');
+    log('Disconnected from device', 'info');
   } catch (e) { 
     log(`Disconnect error: ${e.message}`, 'error'); 
   }
 }
 
-// === HAPPY READ – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   
   try {
     state.isOperating = true; 
     el.dumpBtn.disabled = true;
-    updateStatus('Reading flash...', 'working');
+    updateStatus('Reading flash...','working');
 
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
@@ -851,7 +848,6 @@ async function happyRead() {
   }
 }
 
-// === HAPPY WRITE – OPTIMIZAT DIN FIȘIERUL 2 ===
 async function happyWrite() {
   if (!state.connected || state.isOperating) return;
   
@@ -905,6 +901,8 @@ async function happyWrite() {
 
     if (!confirmWrite) {
       log('Write cancelled by user', 'warning');
+      state.isOperating = false;
+      el.writeBtn.disabled = false;
       return;
     }
 
@@ -986,7 +984,6 @@ async function happyWrite() {
   }
 }
 
-// === BACKUP INDEPENDENT ===
 async function happySafetySendBackup() {
   if (state.selectedFiles.length === 0) {
     alert('Please select at least one file!');
@@ -1248,7 +1245,6 @@ el.flashSizeSelect.onchange = e => {
   }
 };
 
-// Inițializează butonul Backup
 el.safetyBackupBtn.disabled = true;
 
 log('Universal ESP Flash Tool Ready!', 'success');
