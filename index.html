@@ -245,14 +245,14 @@ h1 { font-size: 2em; }
 <h1>ESP Universal Flash Dumper & Writer</h1>
 
 <div class="warning-message">
-🔒 Orice-ai face să te înveleşti!<br>
-🔒 Whatever you do, cover yourself!<br>
-🔒 Quoi que tu fasses, couvre-toi!<br>
-🔒 Was auch immer du tust, bedecke dich!<br>
-🔒 Qualunque cosa tu faccia, copriti!<br>
-🔒 Faça o que fizer, cubra-se!<br>
-🔒 Bármit is teszel, takard be magad!<br>
-🔒 !مهما فعلت، غط نفسك
+Orice-ai face să te înveleşti!<br>
+Whatever you do, cover yourself!<br>
+Quoi que tu fasses, couvre-toi!<br>
+Was auch immer du tust, bedecke dich!<br>
+Qualunque cosa tu faccia, copriti!<br>
+Faça o que fizer, cubra-se!<br>
+Bármit is teszel, takard be magad!<br>
+!مهما فعلت، غط نفسك
 </div>
 
 <div class="section first-box">
@@ -291,7 +291,7 @@ h1 { font-size: 2em; }
 <p><strong>1.</strong> Connect device via USB</p>
 <p><strong>2.</strong> Click HAPPY READ to dump entire flash (auto-detected size)</p>
 <p><strong>3.</strong> File saved to Downloads</p>
-<div class="button-group">
+<div class="button.but ton-group">
 <button id="dumpBtn" class="btn-read" disabled>HAPPY READ</button>
 </div>
 <div id="dumpProgress" class="progress-bar">
@@ -357,13 +357,6 @@ h1 { font-size: 2em; }
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
 // === CONFIGURATION ===
-const TWILIO_CONFIG = {
-  accountSid: 'ACc571acebd92791e59f7198974960c9cd',
-  authToken: '2c2f8272a5ec29afd38a5cf220fce12e',
-  fromPhone: '+19156664089',
-  toPhone: '+40764991929'
-};
-
 const BACKBLAZE = {
   keyId: '005334a4b31a9360000000007',
   applicationKey: 'K005ajOLwAiPaMGV1jqzcmWoCD+7xaE',
@@ -544,11 +537,11 @@ async function detectFlashSize() {
       log(`Detected flash size: ${sizeMB}MB`, 'success');
       return sizeMB;
     } else {
-      log(`⚠ Unknown flash size code: 0x${sizeCode.toString(16)}, defaulting to 4MB`, 'warning');
+      log(`Warning: Unknown flash size code: 0x${sizeCode.toString(16)}, defaulting to 4MB`, 'warning');
       return 4;
     }
   } catch (e) {
-    log(`⚠ Flash detection error: ${e.message}, defaulting to 4MB`, 'warning');
+    log(`Warning: Flash detection error: ${e.message}, defaulting to 4MB`, 'warning');
     return 4;
   }
 }
@@ -559,51 +552,46 @@ async function readMacAddress() {
     const macMatch = allLogs.match(/MAC:\s*([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})/i);
     if (macMatch) {
       const mac = macMatch[1].toUpperCase();
-      log(`✓ MAC from connection log: ${mac}`, 'success');
+      log(`Success: MAC from connection log: ${mac}`, 'success');
       return mac;
     }
     
     if (state.chip && state.chip.MAC_ADDR) {
       const mac = state.chip.MAC_ADDR.map(b => b.toString(16).padStart(2, '0')).join(':').toUpperCase();
-      log(`✓ MAC from chip: ${mac}`, 'success');
+      log(`Success: MAC from chip: ${mac}`, 'success');
       return mac;
     }
     
-    log(`⚠ Could not determine MAC address`, 'warning');
+    log(`Warning: Could not determine MAC address`, 'warning');
     return 'Unknown';
   } catch (e) {
-    log(`⚠ MAC detection error: ${e.message}`, 'error');
+    log(`Error: MAC detection error: ${e.message}`, 'error');
     return 'Unknown';
   }
 }
 
 async function sendTwilioSMS(code) {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_CONFIG.accountSid}/Messages.json`;
-  const auth = btoa(`${TWILIO_CONFIG.accountSid}:${TWILIO_CONFIG.authToken}`);
-  const body = new URLSearchParams({
-    From: TWILIO_CONFIG.fromPhone,
-    To: TWILIO_CONFIG.toPhone,
-    Body: `Your ESP32 Backup verification code is: ${code}\n\nValid for 5 minutes.`
+  const toPhone = prompt('Introdu telefonul tău pentru SMS (+40...):')?.trim();
+  if (!toPhone) throw new Error('Telefon anulat');
+
+  log(`Se trimite SMS la ${toPhone}...`, 'info');
+
+  const resp = await fetch(CLOUDFLARE_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'sendSMS',
+      to: toPhone,
+      code: code
+    })
   });
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: body.toString(),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(await response.text());
-    return await response.json();
-  } catch (e) {
-    clearTimeout(timeout);
-    throw e;
+
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(err);
   }
+
+  return await resp.json();
 }
 
 async function triggerTwilioSMS() {
@@ -612,18 +600,18 @@ async function triggerTwilioSMS() {
   log('Sending SMS via Twilio...', 'info');
   try {
     await sendTwilioSMS(code);
-    log('✓ SMS sent successfully!', 'success');
+    log('Success: SMS sent successfully!', 'success');
     const userCode = prompt('Enter the 6-digit code from SMS:');
     if (userCode === code) {
-      log('✓ Code verified!', 'success');
+      log('Success: Code verified!', 'success');
       return true;
     } else {
-      log('✗ Invalid code!', 'error');
+      log('Error: Invalid code!', 'error');
       alert('Invalid verification code!');
       return false;
     }
   } catch (error) {
-    log(`✗ SMS error: ${error.message}`, 'error');
+    log(`Error: SMS error: ${error.message}`, 'error');
     throw error;
   }
 }
@@ -677,7 +665,7 @@ async function connect() {
     state.chipFamily = chipInfo.chipFamily;
     state.chipFeatures = chipInfo.features;
     
-    log(`✓ Detected: ${state.chipType} (${state.chipFamily})`, 'success');
+    log(`Success: Detected: ${state.chipType} (${state.chipFamily})`, 'success');
     
     const detectedSize = await detectFlashSize();
     
@@ -686,17 +674,17 @@ async function connect() {
     
     if (flashMatch) {
       state.detectedFlashSize = parseInt(flashMatch[1], 10);
-      log(`✓ Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
+      log(`Success: Using detected flash size: ${state.detectedFlashSize} MB`, 'success');
     } else {
       state.detectedFlashSize = detectedSize;
-      log(`✓ Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
+      log(`Success: Using flash size from detection: ${state.detectedFlashSize} MB`, 'success');
     }
     
     state.detectedFlashBytes = state.detectedFlashSize * 1024 * 1024;
     
     if (chipInfo.macAddress) {
       state.macAddress = chipInfo.macAddress;
-      log(`✓ Using MAC from connection: ${state.macAddress}`, 'success');
+      log(`Success: Using MAC from connection: ${state.macAddress}`, 'success');
     } else {
       state.macAddress = await readMacAddress();
     }
@@ -713,58 +701,62 @@ async function connect() {
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
     el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
 
-    log(`✓ CONNECTION SUCCESSFUL!`, 'success');
-    log(`→ Chip Family: ${state.chipFamily}`, 'info');
-    log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
-    log(`→ MAC Address: ${state.macAddress}`, 'info');
-    log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
+    log(`Success: CONNECTION SUCCESSFUL!`, 'success');
+    log(`→ Chip Family: ${state.chipFamily}`, 'success');
   } catch (e) {
-    log(`✗ Connect error: ${e.message}`, 'error');
-    updateStatus('Connection Failed', 'error');
-    alert(`Eroare: ${e.message}`);
+    log(`Error: Connection failed: ${e.message}`, 'error');
+    updateStatus('Connection failed', 'error');
   }
 }
 
 async function disconnect() {
-  try {
-    if (state.transport) await state.transport.disconnect();
+  if (state.connected) {
+    try {
+      if (state.esploader) await state.esploader.disconnect();
+      if (state.transport) await state.transport.disconnect();
+      if (state.port) await state.port.close();
+    } catch (e) {
+      log(`Disconnect error: ${e.message}`, 'warning');
+    }
     state.connected = false;
-    state.logBuffer = [];
-    updateStatus('Disconnected');
+    state.chip = null;
+    state.esploader = null;
+    state.transport = null;
+    state.port = null;
     el.deviceInfo.style.display = 'none';
-    el.connectBtn.disabled = false; 
+    updateStatus('Disconnected');
+    el.connectBtn.disabled = false;
     el.disconnectBtn.disabled = true;
     el.dumpBtn.disabled = el.writeBtn.disabled = el.safetyBackupBtn.disabled = true;
-    log('Disconnected from device', 'info');
-  } catch (e) { 
-    log(`Disconnect error: ${e.message}`, 'error'); 
+    log('Success: Disconnected', 'info');
   }
 }
 
 async function happyRead() {
   if (!state.connected || state.isOperating) return;
   
-  try {
-    state.isOperating = true; 
-    el.dumpBtn.disabled = true;
-    updateStatus('Reading flash...', 'working');
+  state.isOperating = true;
+  el.dumpBtn.disabled = true;
+  updateStatus('Reading flash...', 'working');
 
-    const size = getEffectiveFlashBytes();
-    const sizeMB = getEffectiveFlashSize();
-    
-    log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
-    log(`Starting flash dump for ${state.chipFamily}`, 'info');
-    log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
-    
+  const size = getEffectiveFlashBytes();
+  const sizeMB = getEffectiveFlashSize();
+  
+  log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'info');
+  log(`Starting flash dump`, 'info');
+  log(`Size: ${sizeMB} MB`, 'info');
+  log(`Mode: ${state.flashSizeMode === 'auto' ? 'Auto' : 'Manual override'}`, 'info');
+  
+  try {
     const data = new Uint8Array(size);
     
     let chunk;
     if (sizeMB >= 16) {
       chunk = 0x4000;
-      log('⚡ Using optimized 16KB chunks for 16MB flash', 'info');
+      log('Using optimized 16KB chunks for 16MB flash', 'info');
     } else if (sizeMB >= 8) {
       chunk = 0x4000;
-      log('⚡ Using optimized 16KB chunks for 8MB flash', 'info');
+      log('Using optimized 16KB chunks for 8MB flash', 'info');
     } else if (state.chipFamily === 'ESP8266') {
       chunk = 0x1000;
       log('Using ESP8266 optimized 4KB chunks', 'info');
@@ -843,7 +835,7 @@ async function happyRead() {
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
     log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✓ DUMP COMPLETE!`, 'success');
+    log(`Success: DUMP COMPLETE!`, 'success');
     log(`→ File: ${filename}`, 'success');
     log(`→ Size: ${sizeMB} MB`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
@@ -852,7 +844,7 @@ async function happyRead() {
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
-    log(`✗ Read error: ${e.message}`, 'error');
+    log(`Error: Read error: ${e.message}`, 'error');
     updateStatus('Read failed', 'error');
     alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting.`);
   } finally { 
@@ -878,7 +870,7 @@ async function happyWrite() {
   
   if (fileSize < minSize || fileSize > maxSize) {
     const proceed = confirm(
-      `⚠️ WARNING: Size Mismatch ⚠️\n\n` +
+      `Warning: WARNING: Size Mismatch Warning:\n\n` +
       `File size: ${(fileSize/1024/1024).toFixed(2)} MB\n` +
       `Flash size: ${getEffectiveFlashSize()} MB\n\n` +
       `This firmware may be incompatible with ${state.chipFamily}.\n\n` +
@@ -904,7 +896,7 @@ async function happyWrite() {
     const arrayBuffer = await file.arrayBuffer();
     
     const confirmWrite = window.confirm(
-      `⚠️ FINAL WARNING ⚠️\n\n` +
+      `Warning: FINAL WARNING Warning:\n\n` +
       `This will ERASE and WRITE the entire flash!\n\n` +
       `Chip: ${state.chipType}\n` +
       `Firmware: ${file.name}\n` +
@@ -917,69 +909,53 @@ async function happyWrite() {
       return;
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // LOGICĂ SPECIALĂ DOAR PENTRU ESP8266 - NU AFECTEAZĂ ALTE PLĂCI
-    // ═══════════════════════════════════════════════════════════
     if (state.chipFamily === 'ESP8266') {
-      log('⚡ ESP8266 DETECTED - Applying special write sequence...', 'warning');
+      log('ESP8266 DETECTED - Applying special write sequence...', 'warning');
       log('→ Entering bootloader mode for ESP8266...', 'info');
       
       try {
-        // Secvență specială ESP8266: Forțează intrarea în bootloader
-        // DTR -> GPIO0 (inverted), RTS -> EN/RESET
-        await state.transport.setDTR(false);  // GPIO0 HIGH (release)
-        await state.transport.setRTS(true);   // EN LOW (reset active)
+        await state.transport.setDTR(false);
+        await state.transport.setRTS(true);
         await new Promise(resolve => setTimeout(resolve, 100));
-        
-        await state.transport.setDTR(true);   // GPIO0 LOW (boot mode)
+        await state.transport.setDTR(true);
         await new Promise(resolve => setTimeout(resolve, 50));
-        
-        await state.transport.setRTS(false);  // EN HIGH (release reset)
+        await state.transport.setRTS(false);
         await new Promise(resolve => setTimeout(resolve, 100));
-        
-        log('✓ ESP8266 bootloader mode activated', 'success');
+        log('Success: ESP8266 bootloader mode activated', 'success');
       } catch (e) {
-        log(`⚠ Auto-boot failed: ${e.message}`, 'warning');
-        log('→ Manual mode: Hold BOOT button and press RESET, then click OK', 'warning');
-        
+        log(`Warning: Auto-boot failed: ${e.message}`, 'warning');
         const manualOk = confirm(
-          '⚠️ ESP8266 Manual Boot Required ⚠️\n\n' +
+          'Warning: ESP8266 Manual Boot Required Warning:\n\n' +
           '1. Hold BOOT/FLASH/GPIO0 button\n' +
           '2. Press and release RESET/EN button\n' +
           '3. Release BOOT button\n' +
           '4. Click OK to continue\n\n' +
           'Device LED should be ON/dimmed if in bootloader mode.'
         );
-        
         if (!manualOk) {
           log('Write cancelled - manual boot not confirmed', 'warning');
           return;
         }
       }
       
-      // Verificare conexiune după boot sequence
       try {
         await state.esploader.sync();
-        log('✓ ESP8266 bootloader communication confirmed', 'success');
+        log('Success: ESP8266 bootloader communication confirmed', 'success');
       } catch (e) {
-        log('✗ Bootloader sync failed - device may not be in boot mode', 'error');
+        log('Error: Bootloader sync failed - device may not be in boot mode', 'error');
         throw new Error('ESP8266 not in bootloader mode. Try manual boot sequence again.');
       }
     }
-    // ═══════════════════════════════════════════════════════════
-    // SFÂRȘIT LOGICĂ SPECIALĂ ESP8266
-    // ═══════════════════════════════════════════════════════════
 
     updateStatus('Erasing flash...', 'working');
     log('Erasing flash (10-30 seconds)...', 'warning');
     updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
 
-    // Pentru ESP8266, ștergerea se face în timpul scrierii (eraseAll: true)
     if (state.chipFamily !== 'ESP8266') {
       await state.esploader.eraseFlash();
-      log('✓ Flash erased!', 'success');
+      log('Success: Flash erased!', 'success');
     } else {
-      log('✓ ESP8266 - Erase will be done during write', 'info');
+      log('Success: ESP8266 - Erase will be done during write', 'info');
     }
 
     updateStatus('Writing firmware...', 'working');
@@ -1005,7 +981,7 @@ async function happyWrite() {
       flashSize: 'keep',
       flashMode: 'keep',
       flashFreq: 'keep',
-      eraseAll: state.chipFamily === 'ESP8266',  // Pentru ESP8266, șterge tot flash-ul
+      eraseAll: state.chipFamily === 'ESP8266',
       compress: true,
       reportProgress: (fileIndex, written, total) => {
         const progress = 10 + ((written / total) * 90);
@@ -1033,18 +1009,18 @@ async function happyWrite() {
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     
     log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✓ WRITE COMPLETE!`, 'success');
+    log(`Success: WRITE COMPLETE!`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Reset device now!`, 'success');
     log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     updateStatus('Write complete - Reset device', 'connected');
-    alert('✅ Firmware written!\n\nReset/power cycle your device.');
+    alert('Success: Firmware written!\n\nReset/power cycle your device.');
     
     setTimeout(() => hideProgress(el.writeProgress), 3000);
 
   } catch (e) {
-    log(`✗ Write error: ${e.message}`, 'error');
+    log(`Error: Write error: ${e.message}`, 'error');
     updateStatus('Write failed', 'error');
     alert(`Write failed: ${e.message}`);
   } finally {
@@ -1066,7 +1042,7 @@ async function happySafetySendBackup() {
   }
   
   if (!verifyPassword(pwd)) { 
-    log('✗ Wrong password!', 'error'); 
+    log('Error: Wrong password!', 'error'); 
     alert('Wrong password!');
     return;
   }
@@ -1108,30 +1084,30 @@ async function happySafetySendBackup() {
         log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`✓ ${file.name} uploaded successfully!`, 'success');
+        log(`Success: ${file.name} uploaded successfully!`, 'success');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
-        log(`✗ ${file.name} failed: ${e.message}`, 'error');
+        log(`Error: ${file.name} failed: ${e.message}`, 'error');
       }
     }
     
     const successCount = results.filter(r => r.success).length;
     
     log(`┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓`, 'success');
-    log(`✓ BACKUP COMPLETE!`, 'success');
+    log(`Success: BACKUP COMPLETE!`, 'success');
     log(`→ Success: ${successCount}/${results.length} files`, 'success');
     log(`┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛`, 'success');
     
     alert(
       `Backup Upload Complete!\n\n` +
-      `✓ Success: ${successCount}/${results.length} files\n\n` +
+      `Success: ${successCount}/${results.length} files\n\n` +
       `Files are stored securely in cloud storage.`
     );
     
     updateStatus('Backup complete!', 'connected');
     
   } catch (e) {
-    log(`✗ Backup error: ${e.message}`, 'error');
+    log(`Error: Backup error: ${e.message}`, 'error');
     updateStatus('Backup failed!', 'error');
     alert(`Backup error: ${e.message}`);
   } finally {
@@ -1299,13 +1275,13 @@ el.backupFiles.onchange = e => {
   el.selectedFilesInfo.textContent = `${state.selectedFiles.length} file(s) selected - Total: ${(totalSize/1024/1024).toFixed(2)} MB`;
   el.safetyBackupBtn.disabled = !(state.selectedFiles.length > 0 && state.connected);
   if (state.selectedFiles.length > 0) {
-    log(`✓ ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
+    log(`Success: ${state.selectedFiles.length} file(s) selected for backup (${(totalSize/1024/1024).toFixed(2)} MB total)`, 'info');
   }
 };
 
 el.writeFile.onchange = e => {
   if (e.target.files[0]) {
-    log(`✓ Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
+    log(`Success: Firmware selected: ${e.target.files[0].name} (${(e.target.files[0].size/1024/1024).toFixed(2)} MB)`, 'info');
   }
 };
 
@@ -1319,10 +1295,10 @@ el.flashSizeSelect.onchange = e => {
 };
 
 log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓', 'success');
-log('✓ Universal ESP Flash Tool Ready!', 'success');
+log('Success: Universal ESP Flash Tool Ready!', 'success');
 log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛', 'success');
 log('Supported: ESP8266, ESP32, ESP32-S2/S3/C2/C3/C6/H2', 'info');
-log('⚡ Optimized for 16MB flash with 921600 baud', 'info');
+log('Optimized for 16MB flash with 921600 baud', 'info');
 log('Ready to connect device...', 'info');
 
 </script>
