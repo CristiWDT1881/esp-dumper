@@ -230,6 +230,11 @@ color: #1a5f3f;
 line-height: 1.8;
 box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 }
+.emoji-brain { filter: grayscale(100%) brightness(1.2); }
+.emoji-book-green { filter: hue-rotate(90deg) saturate(1.5); }
+.emoji-book-blue { filter: hue-rotate(180deg) saturate(1.2); }
+.emoji-muscle-green { filter: hue-rotate(60deg) saturate(1.3); }
+.emoji-muscle-blue { filter: hue-rotate(180deg) saturate(1.2); }
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
 h1 { font-size: 2em; }
@@ -337,7 +342,7 @@ Bármit is teszel, takard be magad!<br>
 <div id="logContainer" class="log-container">
 <div class="log-entry success"><span id="initialTime1"></span> Universal ESP Flash Tool Ready!</div>
 <div class="log-entry info"><span id="initialTime2"></span> Optimized for learning with patience and passion - WDT81 2025</div>
-<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em;">🧠</span><span style="font-size: 3em;">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;">💪💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;">📚</span><span style="font-size: 4em;">🧠</span> Spor!</div>
+<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em;" class="emoji-brain">🧠</span><span style="font-size: 3em;" class="emoji-book-green">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;" class="emoji-muscle-green">💪</span><span style="font-size: 1em;" class="emoji-muscle-blue">💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;" class="emoji-book-blue">📚</span><span style="font-size: 4em;" class="emoji-brain">🧠</span> Spor!</div>
 </div>
 </div>
 
@@ -698,7 +703,8 @@ async function connect() {
     el.dumpBtn.disabled = el.writeBtn.disabled = false;
 
     log(`CONNECTION SUCCESSFUL!`, 'success');
-    log(`→ Chip Family: ${state.chipFamily}`, 'info');
+    log(`→ Chip Family: ${state.
+   chipFamily}`, 'info');
     log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
     log(`→ MAC Address: ${state.macAddress}`, 'info');
     log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
@@ -737,7 +743,7 @@ async function happyRead() {
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┌────────────────────────────────────────┐`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
     
@@ -763,7 +769,7 @@ async function happyRead() {
     const MAX_RETRIES = 3;
     let consecutiveErrors = 0;
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`└────────────────────────────────────────┘`, 'info');
     
     for (let offset = 0; offset < size; offset += chunk) {
       const blockSize = Math.min(chunk, size - offset);
@@ -827,13 +833,13 @@ async function happyRead() {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`┌────────────────────────────────────────┐`, 'success');
     log(`✓ DUMP COMPLETE!`, 'success');
     log(`→ File: ${filename}`, 'success');
     log(`→ Size: ${sizeMB} MB`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Saved to Downloads`, 'success');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`└────────────────────────────────────────┘`, 'success');
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
@@ -880,11 +886,11 @@ async function happyWrite() {
     el.writeBtn.disabled = true;
     updateStatus('Reading firmware...', 'working');
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`┌────────────────────────────────────────┐`, 'info');
     log(`Starting firmware write to ${state.chipFamily}`, 'info');
     log(`Firmware: ${file.name}`, 'info');
     log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+    log(`└────────────────────────────────────────┘`, 'info');
 
     const arrayBuffer = await file.arrayBuffer();
     
@@ -961,11 +967,11 @@ async function happyWrite() {
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`┌────────────────────────────────────────┐`, 'success');
     log(`✓ WRITE COMPLETE!`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Reset device now!`, 'success');
-    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`└────────────────────────────────────────┘`, 'success');
     
     updateStatus('Write complete - Reset device', 'connected');
     alert('✅ Firmware written!\n\nReset/power cycle your device.');
@@ -1246,4 +1252,4 @@ setTimeout(() => {
 }, 0);
 </script>
 </body>
-</html>
+</html>                       
