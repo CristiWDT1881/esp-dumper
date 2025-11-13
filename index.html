@@ -231,9 +231,9 @@ line-height: 1.8;
 box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 }
 .emoji-brain { filter: grayscale(100%) brightness(1.2); }
-.emoji-book-green { filter: hue-rotate(140deg) saturate(0.8) brightness(0.6); }
+.emoji-book-green { filter: brightness(0) saturate(100%) invert(24%) sepia(41%) saturate(1247%) hue-rotate(116deg) brightness(94%) contrast(94%); }
 .emoji-book-blue { filter: hue-rotate(180deg) saturate(1.2); }
-.emoji-muscle-green { filter: hue-rotate(140deg) saturate(0.8) brightness(0.6); }
+.emoji-muscle-green { filter: brightness(0) saturate(100%) invert(24%) sepia(41%) saturate(1247%) hue-rotate(116deg) brightness(94%) contrast(94%); }
 .emoji-muscle-blue { filter: hue-rotate(180deg) saturate(1.2); }
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
@@ -250,7 +250,7 @@ h1 { font-size: 2em; }
 <h1>ESP Universal Flash Dumper & Writer</h1>
 
 <div class="warning-message">
-Orice-ai face să te înveleşti!<br>
+Orice-ai face să te învelești!<br>
 Whatever you do, cover yourself!<br>
 Quoi que tu fasses, couvre-toi!<br>
 Was auch immer du tust, bedecke dich!<br>
@@ -315,7 +315,7 @@ Bármit is teszel, takard be magad!<br>
 </div>
 <div id="selectedFilesInfo" style="margin-top:10px; color:#1a5f3f; font-weight:bold;"></div>
 <div class="button-group">
-<button id="safetyBackupBtn" class="btn-write" disabled>HAPPY SAFETY SEND BACKUP</button>
+<button id="safetyBackupBtn" class="btn-write">HAPPY SAFETY SEND BACKUP</button>
 </div>
 <div id="fileListContainer" class="file-list-container"></div>
 </div>
@@ -354,8 +354,8 @@ Bármit is teszel, takard be magad!<br>
 <span>Cultural</span>
 </a>
 <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
-<img src="./logoriasi.svg" alt="Radio Iaşi" onerror="this.style.display='none'">
-<span>Radio Iaşi</span>
+<img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
+<span>Radio Iași</span>
 </a>
 </div>
 </div>
@@ -705,7 +705,7 @@ async function connect() {
     log(`CONNECTION SUCCESSFUL!`, 'success');
     log(`→ Chip Family: ${state.chipFamily}`, 'info');
     log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
-    ${state.macAddress}`, 'info');
+    log(`→ MAC Address: ${state.macAddress}`, 'info');
     log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
     
   } catch (e) {
@@ -1237,8 +1237,6 @@ el.flashSizeSelect.onchange = e => {
   }
 };
 
-el.safetyBackupBtn.disabled = true;
-
 // Add timestamps to initial messages that are already in HTML
 setTimeout(() => {
   const initTime = new Date().toLocaleTimeString('ro-RO');
@@ -1252,5 +1250,3 @@ setTimeout(() => {
 </script>
 </body>
 </html>
-    
-    log(`→ MAC Address:
