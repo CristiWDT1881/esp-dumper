@@ -337,7 +337,7 @@ Bármit is teszel, takard be magad!<br>
 <div id="logContainer" class="log-container">
 <div class="log-entry success"><span id="initialTime1"></span> Universal ESP Flash Tool Ready!</div>
 <div class="log-entry info"><span id="initialTime2"></span> Optimized for learning with patience and passion - WDT81 2025</div>
-<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em; color: #1a5f3f;">(book)</span><span style="font-size: 3em;">(book)(book)</span><span style="font-size: 2em;">(light bulb)</span><span style="font-size: 1em; color: #1a5f3f;">(flexed biceps)(flexed biceps)</span><span style="font-size: 2em;">(light bulb)</span><span style="font-size: 3em;">(book)(book)</span><span style="font-size: 4em;">(brain)</span> Spor!</div>
+<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em; color: #1a5f3f;">[book]</span><span style="font-size: 3em;">[book][book]</span><span style="font-size: 2em;">[light bulb]</span><span style="font-size: 1em; color: #1a5f3f;">[flexed biceps][flexed biceps]</span><span style="font-size: 2em;">[light bulb]</span><span style="font-size: 3em;">[book][book]</span><span style="font-size: 4em;">[brain]</span> Spor!</div>
 </div>
 </div>
 
@@ -973,7 +973,7 @@ async function happyWrite() {
     setTimeout(() => hideProgress(el.writeProgress), 3000);
 
   } catch (e) {
-    log(`Write error: ${e.message}, 'error');
+    log(`Write error: ${e.message}`, 'error');
     updateStatus('Write failed', 'error');
     alert(`Write failed: ${e.message}`);
   } finally {
@@ -1035,7 +1035,7 @@ async function happySafetySendBackup() {
         log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`${file.name} uploaded successfully!`, 'upload');
+        log(`${file.name} uploaded successfully!`, 'success');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
         log(`${file.name} failed: ${e.message}`, 'error');
