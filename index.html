@@ -230,11 +230,6 @@ color: #1a5f3f;
 line-height: 1.8;
 box-shadow: 0 8px 30px rgba(0,0,0,0.3);
 }
-.emoji-brain { filter: grayscale(100%) brightness(1.2); }
-.emoji-book-green { filter: sepia(100%) saturate(300%) hue-rotate(95deg) brightness(0.4); }
-.emoji-book-blue { filter: hue-rotate(180deg) saturate(1.2); }
-.emoji-muscle-green { filter: sepia(100%) saturate(300%) hue-rotate(95deg) brightness(0.4); }
-.emoji-muscle-blue { filter: hue-rotate(180deg) saturate(1.2); }
 @media (max-width: 768px) {
 .header-images { flex-direction: column; align-items: center; gap: 15px; }
 h1 { font-size: 2em; }
@@ -250,7 +245,7 @@ h1 { font-size: 2em; }
 <h1>ESP Universal Flash Dumper & Writer</h1>
 
 <div class="warning-message">
-Orice-ai face să te învelești!<br>
+Orice-ai face să te înveleşti!<br>
 Whatever you do, cover yourself!<br>
 Quoi que tu fasses, couvre-toi!<br>
 Was auch immer du tust, bedecke dich!<br>
@@ -342,7 +337,7 @@ Bármit is teszel, takard be magad!<br>
 <div id="logContainer" class="log-container">
 <div class="log-entry success"><span id="initialTime1"></span> Universal ESP Flash Tool Ready!</div>
 <div class="log-entry info"><span id="initialTime2"></span> Optimized for learning with patience and passion - WDT81 2025</div>
-<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em;" class="emoji-brain">🧠</span><span style="font-size: 3em;" class="emoji-book-green">📚</span><span style="font-size: 2em;">💡</span><span style="font-size: 1em;" class="emoji-muscle-green">💪</span><span style="font-size: 1em;" class="emoji-muscle-blue">💪</span><span style="font-size: 2em;">💡</span><span style="font-size: 3em;" class="emoji-book-blue">📚</span><span style="font-size: 4em;" class="emoji-brain">🧠</span> Spor!</div>
+<div class="log-entry success"><span id="initialTime3"></span> <span style="font-size: 4em; color: #1a5f3f;">(book)</span><span style="font-size: 3em;">(book)(book)</span><span style="font-size: 2em;">(light bulb)</span><span style="font-size: 1em; color: #1a5f3f;">(flexed biceps)(flexed biceps)</span><span style="font-size: 2em;">(light bulb)</span><span style="font-size: 3em;">(book)(book)</span><span style="font-size: 4em;">(brain)</span> Spor!</div>
 </div>
 </div>
 
@@ -354,8 +349,8 @@ Bármit is teszel, takard be magad!<br>
 <span>Cultural</span>
 </a>
 <a href="http://player.radioiasi.ro/live-radio-iasi.html" target="_blank" class="radio-link">
-<img src="./logoriasi.svg" alt="Radio Iași" onerror="this.style.display='none'">
-<span>Radio Iași</span>
+<img src="./logoriasi.svg" alt="Radio Iaşi" onerror="this.style.display='none'">
+<span>Radio Iaşi</span>
 </a>
 </div>
 </div>
@@ -364,7 +359,7 @@ Bármit is teszel, takard be magad!<br>
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.4.5/bundle.js';
 
-// ✅ SIGUR - doar configurare publică (fără credențiale)
+// SIGUR - doar configurare publică (fără credențiale)
 const BACKBLAZE_FOLDER = 'Uploads';
 const BACKBLAZE_BUCKET = 'githubwdt81';
 
@@ -704,7 +699,7 @@ async function connect() {
 
     log(`CONNECTION SUCCESSFUL!`, 'success');
     log(`→ Chip Family: ${state.chipFamily}`, 'info');
-    ashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
+    log(`→ Flash Size: ${state.detectedFlashSize} MB (${state.detectedFlashBytes} bytes)`, 'info');
     log(`→ MAC Address: ${state.macAddress}`, 'info');
     log(`→ Features: ${state.chipFeatures || 'N/A'}`, 'info');
     
@@ -742,7 +737,7 @@ async function happyRead() {
     const size = getEffectiveFlashBytes();
     const sizeMB = getEffectiveFlashSize();
     
-    log(`┌────────────────────────────────────────┐`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     log(`Starting flash dump for ${state.chipFamily}`, 'info');
     log(`Flash size: ${sizeMB} MB (${size} bytes)`, 'info');
     
@@ -751,10 +746,10 @@ async function happyRead() {
     let chunk;
     if (sizeMB >= 16) {
       chunk = 0x4000;
-      log('⚡ Using optimized 16KB chunks for 16MB flash', 'info');
+      log('Using optimized 16KB chunks for 16MB flash', 'info');
     } else if (sizeMB >= 8) {
       chunk = 0x4000;
-      log('⚡ Using optimized 16KB chunks for 8MB flash', 'info');
+      log('Using optimized 16KB chunks for 8MB flash', 'info');
     } else if (state.chipFamily === 'ESP8266') {
       chunk = 0x1000;
       log('Using ESP8266 optimized 4KB chunks', 'info');
@@ -768,7 +763,7 @@ async function happyRead() {
     const MAX_RETRIES = 3;
     let consecutiveErrors = 0;
     
-    log(`└────────────────────────────────────────┘`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     
     for (let offset = 0; offset < size; offset += chunk) {
       const blockSize = Math.min(chunk, size - offset);
@@ -832,17 +827,17 @@ async function happyRead() {
     updateProgress(el.dumpProgress, el.dumpProgressFill, 100, 'Complete!');
     setTimeout(() => hideProgress(el.dumpProgress), 2000);
     
-    log(`┌────────────────────────────────────────┐`, 'success');
-    log(`✓ DUMP COMPLETE!`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`DUMP COMPLETE!`, 'success');
     log(`→ File: ${filename}`, 'success');
     log(`→ Size: ${sizeMB} MB`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Saved to Downloads`, 'success');
-    log(`└────────────────────────────────────────┘`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
     
     updateStatus(`Read complete: ${filename}`, 'connected');
   } catch (e) { 
-    log(`✗ Read error: ${e.message}`, 'error');
+    log(`Read error: ${e.message}`, 'error');
     updateStatus('Read failed', 'error');
     alert(`Read error: ${e.message}\n\nTry disconnecting and reconnecting.`);
   } finally { 
@@ -868,7 +863,7 @@ async function happyWrite() {
   
   if (fileSize < minSize || fileSize > maxSize) {
     const proceed = confirm(
-      `⚠️ WARNING: Size Mismatch ⚠️\n\n` +
+      `WARNING: Size Mismatch\n\n` +
       `File size: ${(fileSize/1024/1024).toFixed(2)} MB\n` +
       `Flash size: ${getEffectiveFlashSize()} MB\n\n` +
       `This firmware may be incompatible with ${state.chipFamily}.\n\n` +
@@ -885,16 +880,16 @@ async function happyWrite() {
     el.writeBtn.disabled = true;
     updateStatus('Reading firmware...', 'working');
     
-    log(`┌────────────────────────────────────────┐`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
     log(`Starting firmware write to ${state.chipFamily}`, 'info');
     log(`Firmware: ${file.name}`, 'info');
     log(`Size: ${(fileSize/1024/1024).toFixed(2)} MB`, 'info');
-    log(`└────────────────────────────────────────┘`, 'info');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
 
     const arrayBuffer = await file.arrayBuffer();
     
     const confirmWrite = window.confirm(
-      `⚠️ FINAL WARNING ⚠️\n\n` +
+      `FINAL WARNING\n\n` +
       `This will ERASE and WRITE the entire flash!\n\n` +
       `Chip: ${state.chipType}\n` +
       `Firmware: ${file.name}\n` +
@@ -914,7 +909,7 @@ async function happyWrite() {
     updateProgress(el.writeProgress, el.writeProgressFill, 5, 'Erasing...');
 
     await state.esploader.eraseFlash();
-    log('✓ Flash erased!', 'success');
+    log('Flash erased!', 'success');
 
     updateStatus('Writing firmware...', 'working');
     log('Writing firmware...', 'info');
@@ -966,19 +961,19 @@ async function happyWrite() {
 
     updateProgress(el.writeProgress, el.writeProgressFill, 100, 'Complete!');
     
-    log(`┌────────────────────────────────────────┐`, 'success');
-    log(`✓ WRITE COMPLETE!`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
+    log(`WRITE COMPLETE!`, 'success');
     log(`→ Time: ${totalTime}s (${avgSpeed} MB/s)`, 'success');
     log(`→ Reset device now!`, 'success');
-    log(`└────────────────────────────────────────┘`, 'success');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'success');
     
     updateStatus('Write complete - Reset device', 'connected');
-    alert('✅ Firmware written!\n\nReset/power cycle your device.');
+    alert('Firmware written!\n\nReset/power cycle your device.');
     
     setTimeout(() => hideProgress(el.writeProgress), 3000);
 
   } catch (e) {
-    log(`✗ Write error: ${e.message}`, 'error');
+    log(`Write error: ${e.message}, 'error');
     updateStatus('Write failed', 'error');
     alert(`Write failed: ${e.message}`);
   } finally {
@@ -1024,7 +1019,7 @@ async function happySafetySendBackup() {
     for (let i = 0; i < state.selectedFiles.length; i++) {
       const file = state.selectedFiles[i];
       const fileExt = file.name.substring(file.name.lastIndexOf('.'));
-      const uploadFileName = `${BACKBLAZE_FOLDER}/${state.chipFamily}_${state.macAddress.replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
+      const uploadFileName = `${BACKBLAZE_FOLDER}/${state.chipFamily || 'unknown'}_${(state.macAddress || 'unknown').replace(/:/g, '-')}_${new Date().toISOString().slice(0,10)}_${i}${fileExt}`;
       
       const progressDiv = document.createElement('div');
       progressDiv.className = 'file-progress-item';
@@ -1040,7 +1035,7 @@ async function happySafetySendBackup() {
         log(`→ Uploading file ${i+1}/${state.selectedFiles.length}: ${file.name}`, 'info');
         const url = await uploadFileToBackblaze(file, uploadFileName, i);
         results.push({ name: file.name, url, success: true });
-        log(`${file.name} uploaded successfully!`, 'success');
+        log(`${file.name} uploaded successfully!`, 'upload');
       } catch (e) {
         results.push({ name: file.name, error: e.message, success: false });
         log(`${file.name} failed: ${e.message}`, 'error');
@@ -1066,7 +1061,7 @@ async function happySafetySendBackup() {
     alert(`Backup error: ${e.message}`);
   } finally {
     state.isOperating = false;
-    el.safetyBackupBtn.disabled = state.selectedFiles.length === 0;
+    el.safetyBackupBtn.disabled = false;
   }
 }
 
@@ -1237,7 +1232,8 @@ el.flashSizeSelect.onchange = e => {
   }
 };
 
-el.safetyBackupBtn.disabled = true;
+// Butonul de backup este activ imediat ce sunt selectate fișiere
+// (fără dependență de conexiune)
 
 // Add timestamps to initial messages that are already in HTML
 setTimeout(() => {
@@ -1252,4 +1248,3 @@ setTimeout(() => {
 </script>
 </body>
 </html>
-    log(`→ Flash Size: ${state.detectedFl
